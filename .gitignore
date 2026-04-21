@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# MAPDL working files
+mapdl_tmp/
+*.rst
+*.db
+*.log
+*.err
+*.out
+*.lock
+*.esav
+*.osav
+*.full
+*.mntr
+*.stat
+*.emat
+*.r001
+*.s001
+Solver.out
+file.*
+ansys.lock
+
+# Plots / results
+results/
+*.png
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

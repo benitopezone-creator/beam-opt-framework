@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "beam-opt-framework"
+version = "0.1.0"
+description = "Dimensional optimisation framework for complex beam structures via ANSYS MAPDL"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "ansys-mapdl-core>=0.68",
+    "scipy>=1.11",
+    "numpy>=1.25",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["beam_opt*"]
+
+[tool.ruff]
+line-length = 100
