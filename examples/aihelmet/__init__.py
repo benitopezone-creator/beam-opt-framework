@@ -1,1 +1,0 @@
-# examples/aihelmet package marker
