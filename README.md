@@ -3,8 +3,7 @@
 A general-purpose **dimensional optimization framework** for complex beam structures
 modelled with ANSYS MAPDL (BEAM188 / SHELL181 elements).
 
-Originally developed for the AI Helmet wearable device (Ti6Al4V, additive manufacturing),
-the framework is intentionally application-agnostic: any assembly of spline-connected
+The framework is intentionally application-agnostic: any assembly of spline-connected
 beams with fixed structural sub-components can be optimized by providing a configuration
 module and, optionally, a custom stress-field evaluator.
 
