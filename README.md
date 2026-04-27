@@ -57,7 +57,7 @@ python run_optimization.py --config v05 --n-ctrl 8 --nproc 4
 
 | Flag | Default | Description |
 |---|---|---|
-| `--config` | `v05` | geometry config module (`v05` / `v07`) |
+| `--config` | geometry config module |
 | `--n-ctrl` | `8` | number of spline control points |
 | `--nproc` | `4` | MAPDL parallel processes |
 | `--run-location` | `./mapdl_tmp` | working directory for MAPDL files |
