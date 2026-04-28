@@ -28,12 +28,6 @@ beam_opt_framework/
 │   ├── analysis.py             ← FEM solve + post-processing orchestrator
 │   ├── optimization.py         ← COBYLA optimizer wrapper
 │   └── report.py               ← textual report + matplotlib plots
-│
-└── examples/
-    └── aihelmet/
-        ├── run_optimization.py ← entry point (replaces ott_aihelmet.py __main__)
-        ├── config_v05.py       ← geometry + fixed elements for version V05
-        └── config_v07.py       ← placeholder for version V07
 ```
 
 ---
@@ -48,8 +42,6 @@ cd beam-opt-framework
 # 2. Install in editable mode (Python ≥ 3.10)
 pip install -e .
 
-# 3. Run the AI Helmet optimisation (V05 config)
-cd examples/aihelmet
 python run_optimization.py --config v05 --n-ctrl 8 --nproc 4
 ```
 
