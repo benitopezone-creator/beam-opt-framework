@@ -42,7 +42,7 @@ cd beam-opt-framework
 # 2. Install in editable mode (Python ≥ 3.10)
 pip install -e .
 
-python run_optimization.py --config v05 --n-ctrl 8 --nproc 4
+python run_optimization.py --config --n-ctrl 8 --nproc 4
 ```
 
 ### CLI flags
