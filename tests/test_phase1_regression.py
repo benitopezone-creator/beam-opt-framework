@@ -30,6 +30,7 @@ from beam_opt.model import (
     Symmetry,
 )
 from beam_opt.optimization import OptimizationProblem
+from beam_opt.post import RectBeamStressEvaluator
 from beam_opt.sections import RectSection
 
 DATA = Path(__file__).parent / "data"
@@ -96,6 +97,7 @@ def make_problem(model: StructuralModel, mapdl) -> OptimizationProblem:
         safety_factor=sc.SAFETY_FACTOR,
         f_react_max=sc.F_REACT_MAX,
         reaction_nodes=[*PLATE, "start", "end"],
+        evaluator=RectBeamStressEvaluator(),  # the reference was computed with it
     )
 
 

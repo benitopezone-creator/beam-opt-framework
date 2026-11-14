@@ -1,5 +1,34 @@
 # Changelog
 
+## [Unreleased] – Phase 3 (stresses for generic sections)
+
+### Added
+- `sections.StressPoints` and `Section.stress_points()`: each shape describes its check
+  points (position, shear stress per unit torque and per unit shear force).
+- `post.SectionStressEvaluator`: von Mises stress for any `Section` from the BEAM188
+  internal forces (SMISC 1–6 and 14–19); it is the new default of `OptimizationProblem`.
+- `sections.CircSection` (`CSOLID`), `sections.TubeSection` (`CTUBE`) and
+  `sections.BoxSection` (`HREC`, thin-walled torsion and shear).
+- Tests against textbook formulas for every shape, comparison with the legacy evaluator
+  and a full optimisation of a circular cantilever against its closed-form optimum.
+
+### Changed
+- `Section` subclasses must implement `stress_points()`.
+- Rectangle, with respect to `RectBeamStressEvaluator` (kept, no longer the default): no
+  torsion stress at the corners (lower stress under biaxial bending with torsion); torsion
+  and shear stresses added linearly at the mid-sides (higher stress under shear with
+  torsion); no mid-length candidate. Identical results without torsion.
+
+### Fixed
+- COBYLA and Nelder-Mead started on the upper bounds built their first simplex outside the
+  admissible box, where the clipped sections give a flat response, and could stop at a
+  poor design while reporting success. The first simplex is now kept inside the bounds.
+  This was the actual cause of the COBYLA stall listed under Phase 4.
+
+### Not done
+- Generic shape read from the MAPDL section mesher and the comparison with the MAPDL
+  section stresses: both need a MAPDL installation.
+
 ## [Unreleased] – Phase 4 (robust optimisation, selectable algorithm)
 
 ### Added
@@ -29,8 +58,9 @@
 
 ### Fixed
 - COBYLA stopped far from the optimum while reporting success with many control points
-  and elements (cantilever, `n_ctrl=16`, `n_elem ≥ 100`: +80 % mass). With bounds, scaling
-  and no redundant constraints it reaches the closed-form optimum within 1 %.
+  and elements (cantilever, `n_ctrl=16`, `n_elem ≥ 100`: +80 % mass). Bounds, scaling and
+  the removal of redundant constraints made the case pass, but the cause was the starting
+  point on the upper bounds: see the fix under Phase 3.
 
 ## [Unreleased] – Phase 6, first part (cantilever example)
 

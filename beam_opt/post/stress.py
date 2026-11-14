@@ -3,8 +3,14 @@ beam_opt.post.stress
 ====================
 Per-element equivalent stress of the optimisable beam.
 
-``RectBeamStressEvaluator`` — conservative von Mises for solid rectangular
-BEAM188 sections.
+``SectionStressEvaluator`` — von Mises stress for any cross-section, from the
+BEAM188 internal forces and the check points of the ``Section`` (default).
+
+``RectBeamStressEvaluator`` — the 0.1 evaluator for solid rectangular
+sections, kept for comparison; see its differences in ``SectionStressEvaluator``.
+
+Legacy rectangular evaluator
+----------------------------
 
 For each optimisable element the stress field is sampled at three locations
 along the element axis (node I, element mid-point, node J) and at several
@@ -43,8 +49,13 @@ import numpy as np
 
 from .extract import beam_smisc
 
-# SMISC identifiers used by the evaluator
+# SMISC identifiers used by the legacy rectangular evaluator
 _SMISC_IDS = [4, 5, 6, 17, 18, 19, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
+
+# Internal forces of BEAM188 (Table 188.2): FX, MY, MZ, TQ, SFZ, SFY at node I
+# (SMISC 1–6) and at node J (SMISC 14–19).
+_FIRST_RESULTANT = (1, 14)
+_RESULTANT_IDS = [first + k for first in _FIRST_RESULTANT for k in range(6)]
 
 
 class StressEvaluator(ABC):
@@ -77,8 +88,52 @@ class StressEvaluator(ABC):
         """
 
 
+class SectionStressEvaluator(StressEvaluator):
+    """
+    Von Mises stress for any ``Section``, from the element internal forces.
+
+    At both nodes of every element, and at every check point of the section
+    (``Section.stress_points``):
+
+        σ_x  = N/A + My·z/Iy − Mz·y/Iz
+        τ    = vector sum of the torsion and shear-force stresses
+        σ_VM = sqrt(σ_x² + 3 τ²)
+
+    and the element value is the maximum.  The section is the one MAPDL
+    uses for the element (the section law at the element mid-point), so the
+    direct and bending stresses coincide with the BEAM188 output.
+
+    Differences from ``RectBeamStressEvaluator`` on a rectangle:
+
+    * corners: no torsion stress (it vanishes there); the legacy evaluator
+      added the maximum torsion stress, overestimating;
+    * mid-sides: torsion and shear stresses are parallel and add linearly;
+      the legacy evaluator combined them as orthogonal, underestimating;
+    * no extra candidate at the element mid-length.
+
+    Without torsion the two coincide wherever a corner or a mid-side governs.
+    """
+
+    def __call__(self, mapdl, beam, law) -> np.ndarray:
+        mesh = beam.mesh
+        sm = beam_smisc(mapdl, mesh.n_elem, _RESULTANT_IDS)
+        section = beam.sections_at(law, mesh.s_elem)
+        pts = section.stress_points()
+        area, iy, iz = section.area, section.iy, section.iz
+
+        sigma = np.zeros(mesh.n_elem)
+        for first in _FIRST_RESULTANT:
+            n, my, mz, tq, vz, vy = (sm[first + k] for k in range(6))
+            sx = n / area + my * pts.z / iy - mz * pts.y / iz
+            txy = pts.ty_t * tq + pts.ty_vy * vy + pts.ty_vz * vz
+            txz = pts.tz_t * tq + pts.tz_vy * vy + pts.tz_vz * vz
+            vm = np.sqrt(sx**2 + 3.0 * (txy**2 + txz**2))  # (n_points, n_elem)
+            sigma = np.maximum(sigma, vm.max(axis=0))
+        return sigma
+
+
 class RectBeamStressEvaluator(StressEvaluator):
-    """Conservative von Mises evaluator for rectangular BEAM188 elements."""
+    """Legacy (0.1) von Mises evaluator for rectangular BEAM188 elements."""
 
     def __call__(self, mapdl, beam, law) -> np.ndarray:
         mesh = beam.mesh

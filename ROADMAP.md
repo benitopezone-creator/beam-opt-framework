@@ -130,6 +130,14 @@ Specifica:
 **Accettazione.** Il rettangolo nuovo riproduce i risultati del vecchio evaluator dove i due
 devono coincidere, e le differenze residue sono spiegate.
 
+*Stato:* implementati `StressPoints`, `SectionStressEvaluator` (ora predefinito) e le sezioni
+rettangolare, circolare piena, tubo e scatolare. La tensione tangenziale è trattata come
+vettore (τ_xy, τ_xz) anziché come somma scalare. Il rettangolo coincide con il vecchio
+evaluator in assenza di torsione; le differenze con torsione sono documentate nel CHANGELOG.
+Non fatti, perché richiedono MAPDL: il caso "generico" dal section mesher e il confronto con
+le tensioni di sezione di MAPDL (`/ESHAPE`); le convenzioni di segno delle risultanti sono
+quindi da verificare sul solutore vero.
+
 ---
 
 ## Fase 4 — Ottimizzazione più robusta

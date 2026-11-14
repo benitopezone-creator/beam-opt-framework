@@ -11,7 +11,7 @@ from collections.abc import Mapping
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .base import Section
+from .base import Section, StressPoints
 
 
 class RectSection(Section):
@@ -68,6 +68,27 @@ class RectSection(Section):
         a, t, beta = self._sides()
         k = 1.0 + 0.6095 * beta + 0.8865 * beta**2 - 1.8023 * beta**3 + 0.9100 * beta**4
         return a * t**2 / (3.0 * k)
+
+    def stress_points(self) -> StressPoints:
+        """
+        Four corners, four mid-sides and the centroid.
+
+        * Corners: extreme bending fibres; shear and torsion stresses vanish.
+        * Mid-sides: Jourawski maximum ``1.5 V / A`` of the shear force
+          parallel to the side, plus the torsion stress, which has the same
+          direction.  ``|T| / Wt`` is exact on the long sides and
+          conservative on the short ones.
+        * Centroid: both Jourawski maxima, no bending and no torsion.
+        """
+        b, h = np.broadcast_arrays(self.b, self.h)
+        jour = 1.5 / (b * h)  # [1/mm²]
+        tors = 1.0 / self.torsion_modulus  # [1/mm³]
+        rows = [(sy * b / 2, sz * h / 2, 0, 0, 0, 0, 0, 0) for sy in (1, -1) for sz in (1, -1)]
+        # (y, z, ty_t, tz_t, ty_vy, tz_vy, ty_vz, tz_vz)
+        rows += [(s * b / 2, 0, 0, s * tors, 0, 0, 0, jour) for s in (1, -1)]
+        rows += [(0, s * h / 2, -s * tors, 0, jour, 0, 0, 0) for s in (1, -1)]
+        rows.append((0, 0, 0, 0, jour, 0, 0, jour))
+        return StressPoints.from_rows(rows, b.shape)
 
     def define(self, mapdl, secnum: int, name: str) -> None:
         mapdl.sectype(secnum, "BEAM", "RECT", name)

@@ -45,12 +45,13 @@ def test_unknown_method_and_wrong_x0_are_rejected(tmp_path):
         ("cobyla", 50, 8),
         ("slsqp", 50, 8),
         ("slsqp", 100, 16),
-        pytest.param("cobyla", 100, 16, marks=pytest.mark.slow),
+        ("cobyla", 100, 16),
     ],
 )
 def test_local_methods_reach_the_closed_form_optimum(tmp_path, method, n_elem, n_ctrl):
-    # (100, 16) is the case where the unscaled COBYLA set-up of 0.2.0.dev0
-    # stopped 80 % above the optimum while reporting success.
+    # (100, 16) from the upper bounds is the case where COBYLA used to stop far
+    # above the optimum while reporting success: its first simplex left the
+    # admissible box, where the clipped sections give a flat response.
     problem = _problem(tmp_path, n_elem, n_ctrl)
     result = optimize(problem, method, x0=problem.upper)
     c = ex.comparison(problem, result.x)

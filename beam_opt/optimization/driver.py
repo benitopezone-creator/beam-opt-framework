@@ -72,11 +72,24 @@ class _Scaled:
         return self.problem.constraint_vector(self.x(z))
 
 
+def _inside(z0: np.ndarray, step: float) -> np.ndarray:
+    """
+    Move a starting point away from the upper bounds by the first step size.
+
+    COBYLA and Nelder-Mead build their first simplex at ``z0 + step`` along
+    every variable.  From a point on the upper bounds those vertices would
+    fall outside the admissible box, where the response is flat (the
+    sections are clipped): the simplex degenerates and the search stops at a
+    poor design while reporting success.
+    """
+    return np.clip(z0, 0.0, max(0.0, 1.0 - step))
+
+
 def _cobyla(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
     opts = {"maxiter": max_evals, "rhobeg": 0.1, "disp": False} | options
     return minimize(
         sp.objective,
-        z0,
+        _inside(z0, opts["rhobeg"]),
         method="COBYLA",
         bounds=sp.bounds,
         constraints=[{"type": "ineq", "fun": sp.constraints}],
@@ -102,13 +115,17 @@ def _slsqp(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
 def _nelder_mead(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
     options = dict(options)
     weight = options.pop("penalty", 100.0)
+    step = options.pop("initial_step", 0.1)  # first simplex size, fraction of the bounds range
+    z0 = _inside(z0, step)
+    simplex = np.vstack([z0, z0 + step * np.eye(sp.n)])
 
     def penalised(z: np.ndarray) -> float:
         violation = max(0.0, -float(np.min(sp.constraints(z))))
         return sp.objective(z) + weight * violation
 
     tol = 1e-6 if tol is None else tol
-    opts = {"maxfev": max_evals, "xatol": tol, "fatol": tol, "adaptive": True} | options
+    opts = {"maxfev": max_evals, "xatol": tol, "fatol": tol, "adaptive": True}
+    opts |= {"initial_simplex": simplex} | options
     return minimize(penalised, z0, method="Nelder-Mead", bounds=sp.bounds, options=opts)
 
 
@@ -181,7 +198,7 @@ def optimize(
     **options
         Method-specific options, e.g. ``rhobeg`` (COBYLA, fraction of the
         bounds range), ``eps`` (SLSQP finite-difference step, scaled),
-        ``penalty`` (Nelder-Mead), ``popsize``, ``mutation``,
+        ``penalty`` and ``initial_step`` (Nelder-Mead), ``popsize``, ``mutation``,
         ``recombination`` (differential evolution).
 
     Returns

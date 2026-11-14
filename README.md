@@ -29,7 +29,7 @@ beam-opt-framework/
 └── beam_opt/                   ← installable package
     ├── materials.py            ← Material (E, nu, rho, sigma_y) — no built-in materials
     ├── geometry/               ← BeamPath (arc-length spline), discretize(), BeamMesh
-    ├── sections/               ← Section interface, RectSection
+    ├── sections/               ← Section interface; rectangle, circle, tube, box
     ├── section_law.py          ← p(s) for named parameters, selectable interpolator
     ├── model/
     │   ├── components.py       ← OptimizableBeam, FixedBeam, FixedShell, StructuralModel
@@ -152,10 +152,13 @@ anchors, curved paths and mesh-convergence studies.
 
 ## Extending
 
-- **New cross-section shape:** subclass `beam_opt.sections.Section` (area, inertias,
-  torsion, `define()` for `SECTYPE`/`SECDATA`, `from_params()`), and pass
-  `OptimizableBeam(mesh, section_factory=MySection.from_params)`.
-- **New stress recovery:** subclass `beam_opt.post.StressEvaluator` and pass it as
+- **Cross-section shape:** `RectSection` (`b`, `h`), `CircSection` (`r`), `TubeSection`
+  (`r`, `t`) and `BoxSection` (`b`, `h`, `t`) are available; choose one with
+  `OptimizableBeam(mesh, section_factory=TubeSection.from_params)` and give the bounds of
+  its parameters. For a new shape, subclass `beam_opt.sections.Section` (area, inertias,
+  torsion, `stress_points()`, `define()` for `SECTYPE`/`SECDATA`, `from_params()`): the
+  stress recovery follows from its check points, with no other change.
+- **Different stress recovery:** subclass `beam_opt.post.StressEvaluator` and pass it as
   `OptimizationProblem(..., evaluator=MyEvaluator())`.
 - **New boundary condition:** subclass `beam_opt.model.bcs.BoundaryCondition`
   (`node_names()` and `apply(mapdl, node_ids)`).

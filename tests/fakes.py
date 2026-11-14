@@ -93,8 +93,8 @@ class StaticCantileverMapdl(FakeMapdl):
 
     The structure is statically determinate, so the internal forces do not
     depend on the sections: they follow from the nodal forces (``FY``/``FZ``)
-    recorded during the build, and the BEAM188 ``SMISC`` stresses from the
-    rectangular ``SECDATA`` of each element.  The beam is assumed clamped at
+    recorded during the build (any section), and the BEAM188 ``SMISC``
+    bending stresses from the ``SECDATA`` of rectangular elements.  The beam is assumed clamped at
     its lowest-x node and oriented as BEAM188 does by default (local y =
     global Y, local z = global Z).  It lets a full optimisation loop run
     without ANSYS; it does not check MAPDL itself.
@@ -114,7 +114,7 @@ class StaticCantileverMapdl(FakeMapdl):
     def _reset(self) -> None:
         self.calls = []
         self._nodes: dict[int, float] = {}  # node -> x [mm]
-        self._secs: dict[int, tuple[float, float]] = {}  # secnum -> (b, h) [mm]
+        self._secs: dict[int, tuple[float, ...]] = {}  # secnum -> SECDATA [mm]
         self._elems: list[tuple[int, int, int]] = []  # (secnum, node I, node J)
         self._forces: list[tuple[int, str, float]] = []
         self._cur_sec = 0
@@ -129,8 +129,8 @@ class StaticCantileverMapdl(FakeMapdl):
     def sectype(self, secnum, *args) -> None:
         self._def_sec = int(secnum)
 
-    def secdata(self, b, h) -> None:
-        self._secs[self._def_sec] = (float(b), float(h))
+    def secdata(self, *data) -> None:
+        self._secs[self._def_sec] = tuple(float(v) for v in data)
 
     def secnum(self, secnum) -> None:
         self._cur_sec = int(secnum)
@@ -154,7 +154,7 @@ class StaticCantileverMapdl(FakeMapdl):
         eps = 1e-9 * (max(self._nodes.values()) - min(self._nodes.values()))
         rows = []
         for sec, ni, nj in self._elems:
-            b, h = self._secs[sec]
+            data = self._secs[sec]
             row = {}
             # (first SMISC id, cut just inside the element)
             for first, stress0, x in (
@@ -163,12 +163,17 @@ class StaticCantileverMapdl(FakeMapdl):
             ):
                 vy, mz = self._resultants(x, "FY")
                 vz, my = self._resultants(x, "FZ")
-                sy = 6.0 * mz / (h * b**2)  # fibres at ±y [MPa]
-                sz = 6.0 * my / (b * h**2)  # fibres at ±z [MPa]
+                # Internal forces FX, MY, MZ, TQ, SFZ, SFY: valid for any section
+                row.update({first: 0.0, first + 1: my, first + 2: -mz, first + 3: 0.0})
                 row.update({first + 4: vz, first + 5: vy})
-                row.update({stress0 + 1: sy, stress0 + 2: -sy, stress0 + 3: sz, stress0 + 4: -sz})
+                if len(data) == 2:  # rectangle: BEAM188 bending stresses as well
+                    b, h = data
+                    sy = 6.0 * mz / (h * b**2)  # SByT = −Mz·y_max/Izz [MPa]
+                    sz = 6.0 * my / (b * h**2)  # SBzT = My·z_max/Iyy [MPa]
+                    row.update({stress0 + 1: sy, stress0 + 2: -sy})
+                    row.update({stress0 + 3: sz, stress0 + 4: -sz})
             rows.append(row)
-        self.smisc = {k: np.array([r[k] for r in rows]) for k in rows[0]}
+        self.smisc = {k: np.array([r.get(k, 0.0) for r in rows]) for k in rows[0]}
         for d in ("FX", "FY", "FZ"):
             total = sum(v for _, dd, v in self._forces if dd == d)
             self.scalars[("FSUM", "ITEM", d)] = -total

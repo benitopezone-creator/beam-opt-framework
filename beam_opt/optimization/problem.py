@@ -22,7 +22,7 @@ import numpy as np
 
 from ..exceptions import SolutionNotConvergedError
 from ..model import ModelBuilder, StructuralModel
-from ..post import RectBeamStressEvaluator, StressEvaluator, last_results, reaction_resultant
+from ..post import SectionStressEvaluator, StressEvaluator, last_results, reaction_resultant
 from ..section_law import OVERSHOOT_FREE, SectionLaw
 from ..solver import SolverSettings, solve
 from .history import HistoryWriter
@@ -85,7 +85,7 @@ class OptimizationProblem:
     reaction_nodes : list[str]
         Names of the nodes whose reactions are summed.
     evaluator : StressEvaluator | None
-        Defaults to ``RectBeamStressEvaluator()``.
+        Defaults to ``SectionStressEvaluator()``, valid for every ``Section``.
     settings : SolverSettings | None
         Defaults to ``SolverSettings()``.
     interpolator : str
@@ -132,7 +132,7 @@ class OptimizationProblem:
         self.sigma_adm = model.material.sigma_y / float(safety_factor)
         self.f_react_max = float(f_react_max)
         self.reaction_nodes = list(reaction_nodes)
-        self.evaluator = evaluator or RectBeamStressEvaluator()
+        self.evaluator = evaluator or SectionStressEvaluator()
         self.settings = settings or SolverSettings()
         self.interpolator = interpolator
         self.on_failure = on_failure
