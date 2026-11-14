@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] – Phase 6, first part (cantilever example)
+
+### Added
+- `examples/01_cantilever/`: minimum-mass cantilever with a tip load and constant width,
+  compared with the closed-form beam of uniform strength (`h*(s) ∝ sqrt(L − s)`, 2/3 of
+  the prismatic mass); command-line entry point, report and comparison plot.
+- `tests/fakes.py`: `StaticCantileverMapdl`, a closed-form stand-in for MAPDL on a
+  statically determinate cantilever, so a full optimisation loop runs without ANSYS.
+- `tests/test_example_cantilever.py`: the example reaches the closed-form optimum
+  (mass within 5 %, stress constraint active); a `mapdl`-marked test repeats the
+  comparison with the real solver (written, not executed yet).
+- `pyproject.toml`: `authors`.
+
+### Known issues
+- With many control points and elements (e.g. `n_ctrl=16`, `n_elem ≥ 100` on the
+  cantilever) COBYLA stops far from the optimum while reporting success; to be addressed
+  in Phase 4 (bounds, scaling, constraint aggregation).
+
 ## [Unreleased] – Phase 2 (user-imposed discretisation)
 
 ### Added

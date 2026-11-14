@@ -87,6 +87,93 @@ class FakeMapdl:
         return _record
 
 
+class StaticCantileverMapdl(FakeMapdl):
+    """
+    Closed-form stand-in for MAPDL on a straight cantilever along global X.
+
+    The structure is statically determinate, so the internal forces do not
+    depend on the sections: they follow from the nodal forces (``FY``/``FZ``)
+    recorded during the build, and the BEAM188 ``SMISC`` stresses from the
+    rectangular ``SECDATA`` of each element.  The beam is assumed clamped at
+    its lowest-x node and oriented as BEAM188 does by default (local y =
+    global Y, local z = global Z).  It lets a full optimisation loop run
+    without ANSYS; it does not check MAPDL itself.
+
+    Parameters
+    ----------
+    directory : str
+        Working directory where ``solve()`` writes the empty ``.rst``.
+    """
+
+    def __init__(self, directory: str) -> None:
+        scalars = {("ACTIVE", "SOLU", "CNVG"): 1.0, ("ACTIVE", "SET", "TIME"): 1.0}
+        super().__init__(scalars=scalars, directory=directory)
+        self.n_solves = 0
+        self._reset()
+
+    def _reset(self) -> None:
+        self.calls = []
+        self._nodes: dict[int, float] = {}  # node -> x [mm]
+        self._secs: dict[int, tuple[float, float]] = {}  # secnum -> (b, h) [mm]
+        self._elems: list[tuple[int, int, int]] = []  # (secnum, node I, node J)
+        self._forces: list[tuple[int, str, float]] = []
+        self._cur_sec = 0
+        self._def_sec = 0
+
+    def clear(self, *args) -> None:
+        self._reset()
+
+    def n(self, num, x, y=0.0, z=0.0) -> None:
+        self._nodes[int(num)] = float(x)
+
+    def sectype(self, secnum, *args) -> None:
+        self._def_sec = int(secnum)
+
+    def secdata(self, b, h) -> None:
+        self._secs[self._def_sec] = (float(b), float(h))
+
+    def secnum(self, secnum) -> None:
+        self._cur_sec = int(secnum)
+
+    def e(self, i, j) -> None:
+        self._elems.append((self._cur_sec, int(i), int(j)))
+
+    def f(self, node, direction, value) -> None:
+        self._forces.append((int(node), str(direction), float(value)))
+
+    def _resultants(self, x: float, direction: str) -> tuple[float, float]:
+        """Shear [N] and bending moment [N·mm] of the forces acting beyond *x*."""
+        loads = [
+            (self._nodes[n], v) for n, d, v in self._forces if d == direction and self._nodes[n] > x
+        ]
+        return sum(v for _, v in loads), sum(v * (xk - x) for xk, v in loads)
+
+    def solve(self, *args) -> None:
+        super().solve(*args)
+        self.n_solves += 1
+        eps = 1e-9 * (max(self._nodes.values()) - min(self._nodes.values()))
+        rows = []
+        for sec, ni, nj in self._elems:
+            b, h = self._secs[sec]
+            row = {}
+            # (first SMISC id, cut just inside the element)
+            for first, stress0, x in (
+                (1, 31, self._nodes[ni] + eps),
+                (14, 36, self._nodes[nj] - eps),
+            ):
+                vy, mz = self._resultants(x, "FY")
+                vz, my = self._resultants(x, "FZ")
+                sy = 6.0 * mz / (h * b**2)  # fibres at ±y [MPa]
+                sz = 6.0 * my / (b * h**2)  # fibres at ±z [MPa]
+                row.update({first + 4: vz, first + 5: vy})
+                row.update({stress0 + 1: sy, stress0 + 2: -sy, stress0 + 3: sz, stress0 + 4: -sz})
+            rows.append(row)
+        self.smisc = {k: np.array([r[k] for r in rows]) for k in rows[0]}
+        for d in ("FX", "FY", "FZ"):
+            total = sum(v for _, dd, v in self._forces if dd == d)
+            self.scalars[("FSUM", "ITEM", d)] = -total
+
+
 # -----------------------------------------------------------------------
 # Canonical model
 # -----------------------------------------------------------------------

@@ -21,6 +21,7 @@ beam-opt-framework/
 ├── ROADMAP.md                  ← development plan (phases)
 ├── CHANGELOG.md
 ├── docs/                       ← design notes (Italian)
+├── examples/                   ← ready-to-run cases with a known solution
 ├── tests/                      ← pytest suite (`mapdl` marker = needs ANSYS)
 │   ├── fakes.py                ← FakeMapdl test double + numbering-free model description
 │   └── data/                   ← regression scenario and golden reference
@@ -61,8 +62,17 @@ pytest -m "not mapdl"           # fast tests, no ANSYS required
 pytest -m mapdl                 # integration tests, require a licensed MAPDL
 ```
 
-Ready-to-run examples (cantilever beam, strongly curved 3-D frame) and their command-line
-entry points are planned for a later phase — see [ROADMAP.md](ROADMAP.md).
+### Example: cantilever of uniform strength
+
+[examples/01_cantilever](examples/01_cantilever) optimises the height of a tip-loaded
+cantilever and compares the result with the closed-form beam of uniform strength
+(parabolic profile, one third lighter than the prismatic beam):
+
+```bash
+python examples/01_cantilever/cantilever.py --save-plots results/cantilever
+```
+
+A strongly curved 3-D frame example is planned — see [ROADMAP.md](ROADMAP.md).
 
 ---
 
