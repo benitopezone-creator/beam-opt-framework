@@ -8,7 +8,7 @@ replaced by a test double.  Typical entry point:
 
 >>> with MapdlSession(run_location="mapdl_tmp", nproc=4) as mapdl:
 ...     problem = OptimizationProblem(mapdl, model, ...)
-...     result = CobylaDriver(problem).run()
+...     result = optimize(problem, method="cobyla")
 
 Design notes
 ------------

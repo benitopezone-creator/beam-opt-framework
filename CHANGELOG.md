@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased] – Phase 4 (robust optimisation, selectable algorithm)
+
+### Added
+- `optimization.optimize(problem, method=...)`: one entry point for every algorithm, chosen
+  by name from the `METHODS` registry — `"cobyla"`, `"slsqp"` (finite-difference
+  gradients), `"nelder-mead"` (penalised constraints) and `"differential-evolution"`
+  (evolutionary global search). Uniform `max_evals` budget, `seed` for reproducible runs.
+- Variables scaled to [0, 1] and mass scaled by the mass at the upper bounds; box bounds
+  passed to the algorithm as `bounds`.
+- The result is the lightest feasible design among those evaluated; `success=False` with an
+  explicit message when no design is feasible.
+- `OptimizationProblem(on_failure="penalty" | "raise", failure_penalty=...)`: a
+  non-converged FEM solution becomes a flagged, penalised `Evaluation(failed=True)`.
+- `OptimizationProblem(history_file=...)` and `optimization.history` (`read_history`,
+  `best_design`): CSV log of every FEM evaluation and restart from it.
+- `OptimizationProblem.lower`, `upper`, `variable_names()`, `constraint_vector()`,
+  `max_violation()`.
+- `slow` pytest marker.
+
+### Changed
+- `OptimizationProblem.constraints()` no longer contains the box bounds, and contains the
+  section-field constraint only for interpolators that can overshoot (`natural_cubic`).
+- `OptimizationProblem.objective()` is geometric and does not trigger a FEM solution.
+- The evaluation cache keeps the last 1024 designs instead of the last one.
+- `CobylaDriver` is a thin wrapper of `optimize`; its `rhobeg` is now a fraction of the
+  bounds range (default 0.1) and the default FEM failure policy is `"penalty"`.
+
+### Fixed
+- COBYLA stopped far from the optimum while reporting success with many control points
+  and elements (cantilever, `n_ctrl=16`, `n_elem ≥ 100`: +80 % mass). With bounds, scaling
+  and no redundant constraints it reaches the closed-form optimum within 1 %.
+
 ## [Unreleased] – Phase 6, first part (cantilever example)
 
 ### Added
@@ -12,11 +44,6 @@
   (mass within 5 %, stress constraint active); a `mapdl`-marked test repeats the
   comparison with the real solver (written, not executed yet).
 - `pyproject.toml`: `authors`.
-
-### Known issues
-- With many control points and elements (e.g. `n_ctrl=16`, `n_elem ≥ 100` on the
-  cantilever) COBYLA stops far from the optimum while reporting success; to be addressed
-  in Phase 4 (bounds, scaling, constraint aggregation).
 
 ## [Unreleased] – Phase 2 (user-imposed discretisation)
 

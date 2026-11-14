@@ -23,6 +23,9 @@ INTERPOLATORS: dict[str, Callable[[np.ndarray, np.ndarray], Callable]] = {
     "linear": lambda s, v: lambda x: np.interp(x, s, v),
 }
 
+#: Interpolators whose values always stay between the control values.
+OVERSHOOT_FREE = frozenset({"pchip", "linear"})
+
 
 class SectionLaw:
     """

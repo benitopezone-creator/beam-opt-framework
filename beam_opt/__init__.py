@@ -17,7 +17,7 @@ from .model import (
     StructuralModel,
     Symmetry,
 )
-from .optimization import CobylaDriver, OptimizationProblem
+from .optimization import CobylaDriver, OptimizationProblem, optimize
 from .post import RectBeamStressEvaluator, StressEvaluator
 from .section_law import SectionLaw
 from .sections import RectSection, Section
@@ -48,5 +48,6 @@ __all__ = [
     "StressEvaluator",
     "StructuralModel",
     "Symmetry",
+    "optimize",
     "solve",
 ]

@@ -41,7 +41,8 @@ python examples/01_cantilever/cantilever.py --save-plots results/cantilever
 ```
 
 Opzioni principali: `--n-elem` (numero di elementi, default 50), `--n-ctrl` (punti di
-controllo, default 8), `--no-plots`. Lo script stampa il report del framework e il
+controllo, default 8), `--method` (`cobyla`, `slsqp`, `nelder-mead`,
+`differential-evolution`), `--max-evals`, `--history file.csv`, `--no-plots`. Lo script stampa il report del framework e il
 confronto con la soluzione di riferimento, e salva `results/cantilever_comparison.png`.
 
 ## Cosa aspettarsi

@@ -37,7 +37,7 @@ beam-opt-framework/
     │   └── builder.py          ← ModelBuilder: writes the model into an injected session
     ├── solver.py               ← solve() + mandatory convergence check
     ├── post/                   ← vectorised extraction (*VGET), stress evaluators
-    ├── optimization/           ← OptimizationProblem (objective, constraints), CobylaDriver
+    ├── optimization/           ← OptimizationProblem, optimize() with selectable algorithm, history
     ├── report/                 ← textual report, plots
     └── session.py              ← MapdlSession: the only place that launches MAPDL
 ```
@@ -85,13 +85,13 @@ import numpy as np
 from beam_opt import (
     BeamPath,
     Clamp,
-    CobylaDriver,
     MapdlSession,
     Material,
     NodalForce,
     OptimizableBeam,
     OptimizationProblem,
     StructuralModel,
+    optimize,
 )
 from beam_opt.geometry import discretize
 from beam_opt.report import print_report
@@ -114,9 +114,34 @@ with MapdlSession(run_location="mapdl_tmp", nproc=4) as mapdl:
         f_react_max=100.0,
         reaction_nodes=["start"],
     )
-    result = CobylaDriver(problem).run(maxiter=500)
+    result = optimize(problem, method="cobyla", max_evals=500)
     print_report(result, problem)
 ```
+
+### Choosing the algorithm
+
+The algorithm is one argument of `optimize`; the problem definition does not change.
+
+| `method` | Family | Use it when |
+|---|---|---|
+| `"cobyla"` (default) | derivative-free, linear approximations on a simplex | general purpose, a few tens of variables |
+| `"slsqp"` | gradient-based (SQP, finite differences) | smooth problem, good starting point: fastest and most accurate |
+| `"nelder-mead"` | simplex search with penalised constraints | very few variables; slow |
+| `"differential-evolution"` | evolutionary, population-based (genetic-algorithm family) | no good starting point, suspected local optima; costs thousands of FEM solutions |
+
+```python
+result = optimize(problem, "differential-evolution", max_evals=5000, seed=1)
+result = optimize(problem, "slsqp", x0=result.x)  # refine the global search
+```
+
+All methods work on variables scaled to [0, 1] with the box bounds enforced, and return the
+lightest *feasible* design evaluated. A non-converged FEM solution is recorded as a failed,
+penalised design instead of stopping the run (`on_failure="raise"` restores the exception).
+
+`OptimizationProblem(..., history_file="run.csv")` logs every FEM evaluation;
+`beam_opt.optimization.best_design("run.csv")` returns the best design of an interrupted
+run to restart from. New algorithms are added by registering a function in
+`beam_opt.optimization.METHODS`.
 
 The same configuration runs with any `n_elem`: the design variables (section-law control
 points along *s*) and every name-based reference stay the same. See
@@ -142,7 +167,7 @@ anchors, curved paths and mesh-convergence studies.
 | Package | Purpose |
 |---|---|
 | `ansys-mapdl-core` | MAPDL Python client |
-| `scipy` | COBYLA optimizer |
+| `scipy` | optimisation algorithms |
 | `numpy` | numerical operations |
 | `matplotlib` | result plots (optional) |
 

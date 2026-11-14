@@ -14,19 +14,26 @@ e.g. ``[b_0 … b_{n-1}, h_0 … h_{n-1}]`` for a rectangular section.
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
 
+from ..exceptions import SolutionNotConvergedError
 from ..model import ModelBuilder, StructuralModel
 from ..post import RectBeamStressEvaluator, StressEvaluator, last_results, reaction_resultant
-from ..section_law import SectionLaw
+from ..section_law import OVERSHOOT_FREE, SectionLaw
 from ..solver import SolverSettings, solve
+from .history import HistoryWriter
 
 logger = logging.getLogger(__name__)
 
 TON_TO_G = 1e6
+
+#: Number of FEM evaluations kept in the cache (a population-based method
+#: asks for the constraints of a whole generation before the objective).
+CACHE_SIZE = 1024
 
 
 @dataclass
@@ -44,12 +51,16 @@ class Evaluation:
         Equivalent stress per optimisable element [MPa].
     reaction : float
         Resultant reaction on ``reaction_nodes`` [N].
+    failed : bool
+        ``True`` if the FEM solution did not converge: ``sigma`` and
+        ``reaction`` are then penalty values, not results.
     """
 
     x: np.ndarray
     mass: float
     sigma: np.ndarray
     reaction: float
+    failed: bool = False
 
 
 class OptimizationProblem:
@@ -79,6 +90,17 @@ class OptimizationProblem:
         Defaults to ``SolverSettings()``.
     interpolator : str
         Section-law interpolator (see ``beam_opt.section_law.INTERPOLATORS``).
+    on_failure : str
+        What to do when the FEM solution does not converge: ``"penalty"``
+        (default) records the design as failed, with a clearly infeasible
+        stress and reaction, so the optimiser moves away from it;
+        ``"raise"`` propagates ``SolutionNotConvergedError``.
+    failure_penalty : float
+        Stress and reaction of a failed evaluation, as multiples of the
+        admissible values [-]: clearly infeasible, but finite.
+    history_file : str | None
+        CSV file receiving one row per FEM evaluation (appended if it
+        exists); see ``beam_opt.optimization.history``.
     """
 
     def __init__(
@@ -94,10 +116,15 @@ class OptimizationProblem:
         evaluator: StressEvaluator | None = None,
         settings: SolverSettings | None = None,
         interpolator: str = "natural_cubic",
+        on_failure: str = "penalty",
+        failure_penalty: float = 10.0,
+        history_file: str | None = None,
     ) -> None:
         unknown = sorted(set(reaction_nodes) - model.node_names())
         if unknown:
             raise ValueError(f"unknown reaction node names: {unknown}")
+        if on_failure not in ("penalty", "raise"):
+            raise ValueError(f"on_failure must be 'penalty' or 'raise', got {on_failure!r}")
         self.mapdl = mapdl
         self.model = model
         self.n_ctrl = int(n_ctrl)
@@ -108,12 +135,15 @@ class OptimizationProblem:
         self.evaluator = evaluator or RectBeamStressEvaluator()
         self.settings = settings or SolverSettings()
         self.interpolator = interpolator
+        self.on_failure = on_failure
+        self.failure_penalty = float(failure_penalty)
 
         self.builder = ModelBuilder(mapdl, jobname=self.settings.jobname)
         self.s_ctrl = np.linspace(0.0, model.beam.mesh.s[-1], self.n_ctrl)
         self.mass_fixed: float = model.fixed_mass()
         self.history: list[Evaluation] = []
-        self._last: Evaluation | None = None
+        self._cache: OrderedDict[bytes, Evaluation] = OrderedDict()
+        self._writer = HistoryWriter(history_file, self.variable_names()) if history_file else None
 
     # ------------------------------------------------------------------
     # Design vector
@@ -124,13 +154,33 @@ class OptimizationProblem:
         """Length of the design vector."""
         return self.n_ctrl * len(self.bounds)
 
+    @property
+    def lower(self) -> np.ndarray:
+        """Lower bound of every design variable [mm]."""
+        return np.concatenate([np.full(self.n_ctrl, lo) for lo, _ in self.bounds.values()])
+
+    @property
+    def upper(self) -> np.ndarray:
+        """Upper bound of every design variable [mm]."""
+        return np.concatenate([np.full(self.n_ctrl, hi) for _, hi in self.bounds.values()])
+
+    def variable_names(self) -> list[str]:
+        """Names of the design variables: ``<parameter>_<control point>``."""
+        return [f"{name}_{k}" for name in self.bounds for k in range(self.n_ctrl)]
+
     def _blocks(self, x: np.ndarray) -> dict[str, np.ndarray]:
         x = np.asarray(x, dtype=np.float64)
         n = self.n_ctrl
         return {name: x[k * n : (k + 1) * n] for k, name in enumerate(self.bounds)}
 
     def law_from_x(self, x: np.ndarray) -> SectionLaw:
-        """Section law for design vector *x* (control values clipped to ``bounds``)."""
+        """
+        Section law for design vector *x*.
+
+        Keeping the control values admissible is the job of the optimiser
+        bounds (``lower``/``upper``); they are still clipped here as a safety
+        net, so that MAPDL never receives an inadmissible section.
+        """
         ctrl = {name: np.clip(v, *self.bounds[name]) for name, v in self._blocks(x).items()}
         return SectionLaw(self.s_ctrl, ctrl, bounds=self.bounds, interpolator=self.interpolator)
 
@@ -139,34 +189,60 @@ class OptimizationProblem:
     # ------------------------------------------------------------------
 
     def evaluate(self, x: np.ndarray) -> Evaluation:
-        """Build, solve and post-process; reuse the last result if *x* is unchanged."""
+        """
+        Build, solve and post-process; reuse a cached result if *x* was seen.
+
+        Raises
+        ------
+        SolutionNotConvergedError
+            If the FEM solution does not converge and ``on_failure="raise"``.
+        """
         x = np.asarray(x, dtype=np.float64)
-        last = self._last
-        if last is not None and np.allclose(x, last.x, rtol=1e-6, atol=1e-8):
-            return last
+        key = np.round(x, 9).tobytes()
+        cached = self._cache.get(key)
+        if cached is not None:
+            self._cache.move_to_end(key)
+            return cached
 
         law = self.law_from_x(x)
         m = self.mapdl
-        ids = self.builder.build(self.model, law)
-        solve(m, self.settings)
-
-        with last_results(m):
-            sigma = self.evaluator(m, self.model.beam, law)
-        with last_results(m):
-            reaction = reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
-
         mass = self.model.beam.mass(law, self.model.material.rho)
-        self._last = Evaluation(x.copy(), mass, sigma, reaction)
-        self.history.append(self._last)
-        return self._last
+        ids = self.builder.build(self.model, law)
+        try:
+            solve(m, self.settings)
+        except SolutionNotConvergedError as err:
+            if self.on_failure == "raise":
+                raise
+            logger.warning("FEM evaluation %d failed: %s", len(self.history) + 1, err)
+            ev = Evaluation(
+                x.copy(),
+                mass,
+                np.full(self.model.beam.mesh.n_elem, self.failure_penalty * self.sigma_adm),
+                self.failure_penalty * self.f_react_max,
+                failed=True,
+            )
+        else:
+            with last_results(m):
+                sigma = self.evaluator(m, self.model.beam, law)
+            with last_results(m):
+                reaction = reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
+            ev = Evaluation(x.copy(), mass, sigma, reaction)
+
+        self.history.append(ev)
+        self._cache[key] = ev
+        if len(self._cache) > CACHE_SIZE:
+            self._cache.popitem(last=False)
+        if self._writer:
+            self._writer.write(ev, self.max_violation(ev))
+        return ev
 
     # ------------------------------------------------------------------
     # Objective
     # ------------------------------------------------------------------
 
     def objective(self, x: np.ndarray) -> float:
-        """Mass of the optimisable beam [g]."""
-        return self.evaluate(x).mass * TON_TO_G
+        """Mass of the optimisable beam [g] (geometric: no FEM solution needed)."""
+        return self.model.beam.mass(self.law_from_x(x), self.model.material.rho) * TON_TO_G
 
     def total_mass(self, x: np.ndarray) -> float:
         """Mass of the full structure [g]."""
@@ -210,11 +286,46 @@ class OptimizationProblem:
         """Reaction constraint F_react ≤ F_react_max [-]."""
         return 1.0 - self.evaluate(x).reaction / self.f_react_max
 
-    def constraints(self) -> list[dict]:
-        """Constraints in ``scipy.optimize.minimize`` format."""
-        return [
-            {"type": "ineq", "fun": self.constraint_section_field},
-            {"type": "ineq", "fun": self.constraint_bounds},
-            {"type": "ineq", "fun": self.constraint_stress},
-            {"type": "ineq", "fun": self.constraint_reaction},
+    @property
+    def needs_field_constraint(self) -> bool:
+        """Whether the section law can leave the bounds between control points."""
+        return self.interpolator not in OVERSHOOT_FREE
+
+    def constraint_vector(self, x: np.ndarray) -> np.ndarray:
+        """
+        All non-bound constraints in one vector (>= 0 when satisfied) [-].
+
+        Stress per element, reaction and, only for interpolators that can
+        overshoot, the section field.  The box bounds on the design variables
+        are not included: pass ``lower``/``upper`` to the optimiser.
+        """
+        parts = [self.constraint_stress(x), [self.constraint_reaction(x)]]
+        if self.needs_field_constraint:
+            parts.append(self.constraint_section_field(x))
+        return np.concatenate(parts)
+
+    def max_violation(self, ev: Evaluation) -> float:
+        """
+        Largest constraint violation of an evaluated design [-]; 0 if feasible.
+
+        Includes the box bounds, normalised by their range.
+        """
+        span = self.upper - self.lower
+        g = [
+            (self.sigma_adm - ev.sigma) / self.sigma_adm,
+            [1.0 - ev.reaction / self.f_react_max],
+            (ev.x - self.lower) / span,
+            (self.upper - ev.x) / span,
         ]
+        if self.needs_field_constraint:
+            g.append(self.constraint_section_field(ev.x))
+        return float(max(0.0, -np.min(np.concatenate(g))))
+
+    def constraints(self) -> list[dict]:
+        """
+        Non-bound constraints in ``scipy.optimize.minimize`` format.
+
+        Prefer ``beam_opt.optimization.optimize``, which also scales the
+        variables and passes the bounds.
+        """
+        return [{"type": "ineq", "fun": self.constraint_vector}]

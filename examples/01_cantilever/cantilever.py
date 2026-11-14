@@ -14,6 +14,7 @@ strength), so it is the reference check of the whole framework:
 Run it with a licensed MAPDL::
 
     python examples/01_cantilever/cantilever.py --save-plots results/cantilever
+    python examples/01_cantilever/cantilever.py --method slsqp
 
 Units: mm, N, ton, s, MPa.
 """
@@ -27,7 +28,6 @@ import numpy as np
 from beam_opt import (
     BeamPath,
     Clamp,
-    CobylaDriver,
     Material,
     NodalForce,
     OptimizableBeam,
@@ -35,6 +35,7 @@ from beam_opt import (
     StructuralModel,
 )
 from beam_opt.geometry import discretize
+from beam_opt.optimization import METHODS, optimize
 from beam_opt.optimization.problem import TON_TO_G
 from beam_opt.sections import RectSection
 from beam_opt.solver import SolverSettings
@@ -73,7 +74,9 @@ def build_model(n_elem: int = 50) -> StructuralModel:
     )
 
 
-def make_problem(mapdl, n_elem: int = 50, n_ctrl: int = 8) -> OptimizationProblem:
+def make_problem(
+    mapdl, n_elem: int = 50, n_ctrl: int = 8, history_file: str | None = None
+) -> OptimizationProblem:
     """Minimum-mass problem on an injected MAPDL session."""
     return OptimizationProblem(
         mapdl,
@@ -85,13 +88,13 @@ def make_problem(mapdl, n_elem: int = 50, n_ctrl: int = 8) -> OptimizationProble
         reaction_nodes=["start"],
         settings=SolverSettings(jobname="cantilever", nlgeom=False),  # linear, as the theory
         interpolator="pchip",  # no overshoot between control points
+        history_file=history_file,
     )
 
 
-def optimize(problem: OptimizationProblem, maxiter: int = 2000):
-    """Run COBYLA from the upper bound of *h* (a feasible prismatic beam)."""
-    x0 = np.full(problem.n_vars, H_BOUNDS[1])
-    return CobylaDriver(problem).run(x0=x0, maxiter=maxiter, tol=1e-5, rhobeg=0.5, disp=False)
+def run(problem: OptimizationProblem, method: str = "cobyla", max_evals: int = 2000, seed=None):
+    """Optimise from the upper bound of *h* (a feasible prismatic beam)."""
+    return optimize(problem, method, x0=problem.upper, max_evals=max_evals, seed=seed)
 
 
 # ── Closed-form reference ─────────────────────────────────────────────────
@@ -205,15 +208,18 @@ def main() -> None:
     parser.add_argument("--n-elem", type=int, default=50, help="number of beam elements")
     parser.add_argument("--n-ctrl", type=int, default=8, help="section-law control points")
     parser.add_argument("--nproc", type=int, default=2, help="MAPDL processors")
-    parser.add_argument("--maxiter", type=int, default=2000, help="maximum FEM evaluations")
+    parser.add_argument("--method", default="cobyla", choices=sorted(METHODS), help="algorithm")
+    parser.add_argument("--max-evals", type=int, default=2000, help="budget of FEM solutions")
+    parser.add_argument("--seed", type=int, default=None, help="seed of the evolutionary method")
+    parser.add_argument("--history", default=None, help="CSV log of every FEM evaluation")
     parser.add_argument("--run-location", default="mapdl_tmp", help="MAPDL working directory")
     parser.add_argument("--save-plots", default=None, help="path prefix for the PNG output")
     parser.add_argument("--no-plots", action="store_true", help="do not open plot windows")
     args = parser.parse_args()
 
     with MapdlSession(args.run_location, nproc=args.nproc, jobname="cantilever") as mapdl:
-        problem = make_problem(mapdl, args.n_elem, args.n_ctrl)
-        result = optimize(problem, args.maxiter)
+        problem = make_problem(mapdl, args.n_elem, args.n_ctrl, args.history)
+        result = run(problem, args.method, args.max_evals, args.seed)
         print_report(result, problem)
         print_comparison(comparison(problem, result.x))
         if args.save_plots or not args.no_plots:

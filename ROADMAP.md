@@ -148,6 +148,14 @@ devono coincidere, e le differenze residue sono spiegate.
 - Interfaccia per altri metodi (SLSQP con differenze finite, eventualmente surrogati) senza
   toccare il problema.
 
+*Stato:* implementata. `optimize(problem, method=...)` con COBYLA, SLSQP, Nelder-Mead ed
+evoluzione differenziale; variabili normalizzate e `bounds`; storico CSV e ripartenza;
+fallimenti FEM penalizzati e segnalati. Il clip dei punti di controllo in `law_from_x` resta
+come rete di sicurezza (il riferimento di regressione della Fase 1 lo presuppone). Verificata
+sulla trave a sbalzo con il sostituto analitico di MAPDL; da eseguire con MAPDL vero. Non
+ancora fatti: surrogati e un algoritmo genetico in senso stretto (codifica binaria/reale con
+operatori dedicati), che richiederebbe una dipendenza come `pymoo`.
+
 ---
 
 ## Fase 5 — Interfaccia di importazione APDL

@@ -32,4 +32,5 @@ testpaths = ["tests"]
 pythonpath = ["tests", "tests/data"]
 markers = [
     "mapdl: integration test that requires a licensed ANSYS MAPDL installation",
+    "slow: long optimisation run (tens of seconds); deselect with -m \"not slow\"",
 ]
