@@ -215,4 +215,5 @@ gradienti analitici (metodo aggiunto) per `slsqp`, non linearità geometrica, re
 - GitHub Actions: lint + `pytest -m "not mapdl"` a ogni push.
 
 *Stato:* fatto l'esempio 01 (trave a sbalzo), eseguibile con il solutore interno. Da fare:
-esempio 02 (telaio curvo), documentazione di teoria, GitHub Actions.
+esempio 02 (telaio curvo), documentazione di teoria. GitHub Actions attivo
+(`.github/workflows/ci.yml`: lint e test senza ANSYS su Python 3.10 e 3.12).

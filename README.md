@@ -1,5 +1,8 @@
 # beam-opt-framework
 
+[![CI](https://github.com/benitopezone-creator/beam-opt-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/benitopezone-creator/beam-opt-framework/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A general-purpose **dimensional (size) optimization framework** for complex, strongly
 curved 3-D beam structures: the cross-section of a curved beam varies along its arc
 length and is optimized for minimum mass under stress, reaction-force and technological

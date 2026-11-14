@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] – Continuous integration
+
+### Added
+- GitHub Actions workflow (`.github/workflows/ci.yml`): `ruff` lint and format check and
+  `pytest -m "not mapdl"` on Python 3.10 and 3.12 at every push and pull request; status
+  badge in the README.
+
 ## [Unreleased] – Built-in solver (the framework without ANSYS)
 
 ### Added
