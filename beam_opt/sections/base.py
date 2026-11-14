@@ -112,6 +112,16 @@ class Section(ABC):
     def torsion_modulus(self) -> np.ndarray:
         """Torsional resistance modulus Wt, such that τ_T,max = |T| / Wt [mm³]."""
 
+    @property
+    def shear_correction(self) -> tuple[np.ndarray | float, np.ndarray | float]:
+        """
+        Shear correction factors (κ_y, κ_z) for shear along local y and z [-].
+
+        Used by the built-in solver for the shear deformation only (the
+        stresses do not depend on it).  Default: 5/6, the solid rectangle.
+        """
+        return 5.0 / 6.0, 5.0 / 6.0
+
     @abstractmethod
     def stress_points(self) -> StressPoints:
         """Check points where the equivalent stress is evaluated."""

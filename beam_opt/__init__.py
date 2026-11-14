@@ -17,6 +17,7 @@ from .model import (
     StructuralModel,
     Symmetry,
 )
+from .native import NativeSolver
 from .optimization import CobylaDriver, OptimizationProblem, optimize
 from .post import RectBeamStressEvaluator, SectionStressEvaluator, StressEvaluator
 from .section_law import SectionLaw
@@ -37,6 +38,7 @@ __all__ = [
     "MapdlSession",
     "Material",
     "ModelBuilder",
+    "NativeSolver",
     "NodalForce",
     "OptimizableBeam",
     "OptimizationProblem",

@@ -115,8 +115,28 @@ class SectionStressEvaluator(StressEvaluator):
     """
 
     def __call__(self, mapdl, beam, law) -> np.ndarray:
+        return self.from_forces(beam_smisc(mapdl, beam.mesh.n_elem, _RESULTANT_IDS), beam, law)
+
+    def from_forces(self, sm: dict[int, np.ndarray], beam, law) -> np.ndarray:
+        """
+        Element stress from the internal forces, whatever solver produced them.
+
+        Parameters
+        ----------
+        sm : dict[int, ndarray]
+            Internal forces keyed by BEAM188 SMISC item: 1–6 at node I and
+            14–19 at node J (FX, MY, MZ, TQ, SFZ, SFY) [N], [N·mm].
+        beam : OptimizableBeam
+            Optimisable beam.
+        law : SectionLaw
+            Current section law.
+
+        Returns
+        -------
+        ndarray, shape (n_elem,)
+            Equivalent stress per element [MPa].
+        """
         mesh = beam.mesh
-        sm = beam_smisc(mapdl, mesh.n_elem, _RESULTANT_IDS)
         section = beam.sections_at(law, mesh.s_elem)
         pts = section.stress_points()
         area, iy, iz = section.area, section.iy, section.iz

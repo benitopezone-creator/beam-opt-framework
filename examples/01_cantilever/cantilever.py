@@ -11,10 +11,11 @@ strength), so it is the reference check of the whole framework:
 
 (with the technological lower bound ``h ≥ h_min`` active near the tip).
 
-Run it with a licensed MAPDL::
+Run it (no ANSYS needed: the built-in solver is the default)::
 
     python examples/01_cantilever/cantilever.py --save-plots results/cantilever
     python examples/01_cantilever/cantilever.py --method slsqp
+    python examples/01_cantilever/cantilever.py --solver mapdl      # licensed MAPDL
 
 Units: mm, N, ton, s, MPa.
 """
@@ -77,7 +78,7 @@ def build_model(n_elem: int = 50) -> StructuralModel:
 def make_problem(
     mapdl, n_elem: int = 50, n_ctrl: int = 8, history_file: str | None = None
 ) -> OptimizationProblem:
-    """Minimum-mass problem on an injected MAPDL session."""
+    """Minimum-mass problem on an injected MAPDL session or ``NativeSolver``."""
     return OptimizationProblem(
         mapdl,
         build_model(n_elem),
@@ -201,12 +202,15 @@ def plot_comparison(problem, x_opt, save_path: str | None = None, show: bool = T
 
 
 def main() -> None:
-    from beam_opt import MapdlSession
+    from beam_opt import MapdlSession, NativeSolver
     from beam_opt.report import print_report
 
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--n-elem", type=int, default=50, help="number of beam elements")
     parser.add_argument("--n-ctrl", type=int, default=8, help="section-law control points")
+    parser.add_argument(
+        "--solver", default="native", choices=["native", "mapdl"], help="FEM solver"
+    )
     parser.add_argument("--nproc", type=int, default=2, help="MAPDL processors")
     parser.add_argument("--method", default="cobyla", choices=sorted(METHODS), help="algorithm")
     parser.add_argument("--max-evals", type=int, default=2000, help="budget of FEM solutions")
@@ -217,13 +221,19 @@ def main() -> None:
     parser.add_argument("--no-plots", action="store_true", help="do not open plot windows")
     args = parser.parse_args()
 
-    with MapdlSession(args.run_location, nproc=args.nproc, jobname="cantilever") as mapdl:
-        problem = make_problem(mapdl, args.n_elem, args.n_ctrl, args.history)
+    def solve_and_report(session) -> None:
+        problem = make_problem(session, args.n_elem, args.n_ctrl, args.history)
         result = run(problem, args.method, args.max_evals, args.seed)
         print_report(result, problem)
         print_comparison(comparison(problem, result.x))
         if args.save_plots or not args.no_plots:
             plot_comparison(problem, result.x, args.save_plots, show=not args.no_plots)
+
+    if args.solver == "native":
+        solve_and_report(NativeSolver())
+    else:
+        with MapdlSession(args.run_location, nproc=args.nproc, jobname="cantilever") as mapdl:
+            solve_and_report(mapdl)
 
 
 if __name__ == "__main__":

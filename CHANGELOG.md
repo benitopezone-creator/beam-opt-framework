@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased] – Built-in solver (the framework without ANSYS)
+
+### Added
+- `beam_opt.native.NativeSolver`: linear 3-D beam solver (two-node Timoshenko elements,
+  BEAM188 default orientation and internal-force convention) used in place of the MAPDL
+  session: `OptimizationProblem(NativeSolver(), model, ...)`. Supports `FixedBeam`,
+  `Clamp`, `Symmetry`, `ImposedDisplacement`, `NodalForce`, `RigidRegion`, redundant
+  constraints, and shells that belong to a rigid region.
+- `SectionStressEvaluator.from_forces()`: stress evaluation from internal forces, shared
+  by both solvers. `Section.shear_correction`.
+- `tests/test_native.py`: closed-form checks (cantilever, fixed-fixed and propped beams,
+  imposed displacement, symmetry, rigid arm, quarter-circle arcs in and out of plane) and
+  the curved frame with rigid plate.
+- Example 01 runs with the built-in solver by default (`--solver native | mapdl`);
+  `docs/img/cantilever_comparison.png` is its actual output.
+
+### Limits
+- Linear analysis only; deformable shells need MAPDL. Not yet compared with MAPDL results.
+
 ## [Unreleased] – Phase 3 (stresses for generic sections)
 
 ### Added

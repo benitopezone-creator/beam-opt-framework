@@ -76,6 +76,12 @@ class TubeSection(Section):
         ro, ri = self.r, self.r_inner
         return 4.0 / 3.0 * (ro**2 + ro * ri + ri**2) / (ro**2 + ri**2)
 
+    @property
+    def shear_correction(self) -> tuple[np.ndarray, np.ndarray]:
+        # 0.9 for the solid circle, 0.5 for a thin tube, linear in between
+        kappa = 0.5 + 0.4 * (1.0 - self.r_inner / self.r) ** 2
+        return kappa, kappa
+
     def stress_points(self) -> StressPoints:
         """
         ``N_ANGLES`` points on the outer circle, at y = r cos θ, z = r sin θ.

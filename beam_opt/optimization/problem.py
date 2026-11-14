@@ -22,6 +22,7 @@ import numpy as np
 
 from ..exceptions import SolutionNotConvergedError
 from ..model import ModelBuilder, StructuralModel
+from ..native import NativeSolver
 from ..post import SectionStressEvaluator, StressEvaluator, last_results, reaction_resultant
 from ..section_law import OVERSHOOT_FREE, SectionLaw
 from ..solver import SolverSettings, solve
@@ -70,7 +71,8 @@ class OptimizationProblem:
     Parameters
     ----------
     mapdl
-        MAPDL session (or a test double), owned by the caller.
+        MAPDL session (or a test double), owned by the caller, or a
+        ``beam_opt.native.NativeSolver`` to run without ANSYS.
     model : StructuralModel
         Structure to optimise.
     n_ctrl : int
@@ -126,6 +128,7 @@ class OptimizationProblem:
         if on_failure not in ("penalty", "raise"):
             raise ValueError(f"on_failure must be 'penalty' or 'raise', got {on_failure!r}")
         self.mapdl = mapdl
+        self.native = isinstance(mapdl, NativeSolver)
         self.model = model
         self.n_ctrl = int(n_ctrl)
         self.bounds = {k: (float(lo), float(hi)) for k, (lo, hi) in bounds.items()}
@@ -133,6 +136,11 @@ class OptimizationProblem:
         self.f_react_max = float(f_react_max)
         self.reaction_nodes = list(reaction_nodes)
         self.evaluator = evaluator or SectionStressEvaluator()
+        if self.native and not hasattr(self.evaluator, "from_forces"):
+            raise TypeError(
+                "with NativeSolver the stress evaluator must provide from_forces() "
+                "(e.g. SectionStressEvaluator)"
+            )
         self.settings = settings or SolverSettings()
         self.interpolator = interpolator
         self.on_failure = on_failure
@@ -205,11 +213,9 @@ class OptimizationProblem:
             return cached
 
         law = self.law_from_x(x)
-        m = self.mapdl
         mass = self.model.beam.mass(law, self.model.material.rho)
-        ids = self.builder.build(self.model, law)
         try:
-            solve(m, self.settings)
+            sigma, reaction = self._solve(law)
         except SolutionNotConvergedError as err:
             if self.on_failure == "raise":
                 raise
@@ -222,10 +228,6 @@ class OptimizationProblem:
                 failed=True,
             )
         else:
-            with last_results(m):
-                sigma = self.evaluator(m, self.model.beam, law)
-            with last_results(m):
-                reaction = reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
             ev = Evaluation(x.copy(), mass, sigma, reaction)
 
         self.history.append(ev)
@@ -235,6 +237,21 @@ class OptimizationProblem:
         if self._writer:
             self._writer.write(ev, self.max_violation(ev))
         return ev
+
+    def _solve(self, law: SectionLaw) -> tuple[np.ndarray, float]:
+        """Element stresses [MPa] and reaction [N] for section law *law*."""
+        if self.native:
+            res = self.mapdl.analyze(self.model, law, self.reaction_nodes)
+            return self.evaluator.from_forces(res.forces, self.model.beam, law), res.reaction
+
+        m = self.mapdl
+        ids = self.builder.build(self.model, law)
+        solve(m, self.settings)
+        with last_results(m):
+            sigma = self.evaluator(m, self.model.beam, law)
+        with last_results(m):
+            reaction = reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
+        return sigma, reaction
 
     # ------------------------------------------------------------------
     # Objective

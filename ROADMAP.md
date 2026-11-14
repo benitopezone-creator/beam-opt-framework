@@ -189,6 +189,19 @@ soluzione dell'esempio scritto a mano.
 
 ---
 
+## Fase 7 — Solutore interno (framework senza ANSYS)
+
+**Obiettivo.** Permettere a chiunque di provare il framework senza licenza e far girare
+ottimizzazioni vere nei test.
+
+*Stato:* implementato `beam_opt.native.NativeSolver` (travi di Timoshenko 3D, analisi
+lineare), intercambiabile con la sessione MAPDL. Verificato su soluzioni analitiche.
+Da fare: confronto diretto con MAPDL sullo stesso modello (spostamenti e risultanti),
+gradienti analitici (metodo aggiunto) per `slsqp`, non linearità geometrica, rendere
+`ansys-mapdl-core` una dipendenza opzionale.
+
+---
+
 ## Fase 6 — Esempi e documentazione
 
 - `examples/01_cantilever/`: trave a sbalzo, carico in punta. Verifica analitica (freccia
@@ -200,3 +213,6 @@ soluzione dell'esempio scritto a mano.
 - `docs/`: teoria (legge di sezione, recupero tensioni, ipotesi), guida utente, come aggiungere
   una sezione e un vincolo.
 - GitHub Actions: lint + `pytest -m "not mapdl"` a ogni push.
+
+*Stato:* fatto l'esempio 01 (trave a sbalzo), eseguibile con il solutore interno. Da fare:
+esempio 02 (telaio curvo), documentazione di teoria, GitHub Actions.

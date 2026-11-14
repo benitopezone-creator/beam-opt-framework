@@ -1,9 +1,19 @@
 # beam-opt-framework
 
 A general-purpose **dimensional (size) optimization framework** for complex, strongly
-curved 3-D beam structures modelled with ANSYS MAPDL (BEAM188 / SHELL181 elements):
-the cross-section of a curved beam varies along its arc length and is optimized for
-minimum mass under stress, reaction-force and technological constraints.
+curved 3-D beam structures: the cross-section of a curved beam varies along its arc
+length and is optimized for minimum mass under stress, reaction-force and technological
+constraints.
+
+The structure is analysed either with the **built-in beam solver** (no ANSYS needed) or
+with **ANSYS MAPDL** (BEAM188 / SHELL181 elements, large displacements) through PyMAPDL;
+the problem definition is the same.
+
+![Optimised cantilever against the closed-form beam of uniform strength](docs/img/cantilever_comparison.png)
+
+*Example 01: the optimised height of a tip-loaded cantilever follows the closed-form beam
+of uniform strength (mass +1.7 % with 8 control points, 32 % lighter than the prismatic
+beam).*
 
 The framework is intentionally application-agnostic: any beam with fixed structural
 sub-components can be optimized by describing it in a configuration (geometry, material,
@@ -35,7 +45,8 @@ beam-opt-framework/
     │   ├── components.py       ← OptimizableBeam, FixedBeam, FixedShell, StructuralModel
     │   ├── bcs.py              ← Clamp, Symmetry, ImposedDisplacement, RigidRegion, NodalForce
     │   └── builder.py          ← ModelBuilder: writes the model into an injected session
-    ├── solver.py               ← solve() + mandatory convergence check
+    ├── native.py               ← NativeSolver: built-in linear beam solver (no ANSYS)
+    ├── solver.py               ← MAPDL solve() + mandatory convergence check
     ├── post/                   ← vectorised extraction (*VGET), stress evaluators
     ├── optimization/           ← OptimizationProblem, optimize() with selectable algorithm, history
     ├── report/                 ← textual report, plots
@@ -57,8 +68,11 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows; on Linux/macOS: source .venv/bin/activate
 pip install -e ".[dev]"
 
-# 3. Run the test suite
-pytest -m "not mapdl"           # fast tests, no ANSYS required
+# 3. Run the first example (built-in solver, a few seconds)
+python examples/01_cantilever/cantilever.py
+
+# 4. Run the test suite
+pytest -m "not mapdl"           # no ANSYS required
 pytest -m mapdl                 # integration tests, require a licensed MAPDL
 ```
 
@@ -70,6 +84,7 @@ cantilever and compares the result with the closed-form beam of uniform strength
 
 ```bash
 python examples/01_cantilever/cantilever.py --save-plots results/cantilever
+python examples/01_cantilever/cantilever.py --solver mapdl     # with a licensed MAPDL
 ```
 
 A strongly curved 3-D frame example is planned — see [ROADMAP.md](ROADMAP.md).
@@ -85,8 +100,8 @@ import numpy as np
 from beam_opt import (
     BeamPath,
     Clamp,
-    MapdlSession,
     Material,
+    NativeSolver,
     NodalForce,
     OptimizableBeam,
     OptimizationProblem,
@@ -104,19 +119,42 @@ model = StructuralModel(
     bcs=[Clamp("start"), NodalForce("load", "FY", -20.0)],
 )
 
-with MapdlSession(run_location="mapdl_tmp", nproc=4) as mapdl:
-    problem = OptimizationProblem(
-        mapdl,
-        model,
-        n_ctrl=6,  # design variables per section parameter
-        bounds={"b": (2.0, 10.0), "h": (2.0, 20.0)},
-        safety_factor=1.5,
-        f_react_max=100.0,
-        reaction_nodes=["start"],
-    )
-    result = optimize(problem, method="cobyla", max_evals=500)
-    print_report(result, problem)
+problem = OptimizationProblem(
+    NativeSolver(),  # or a MAPDL session, see below
+    model,
+    n_ctrl=6,  # design variables per section parameter
+    bounds={"b": (2.0, 10.0), "h": (2.0, 20.0)},
+    safety_factor=1.5,
+    f_react_max=100.0,
+    reaction_nodes=["start"],
+)
+result = optimize(problem, method="cobyla", max_evals=500)
+print_report(result, problem)
 ```
+
+### Choosing the solver
+
+| | `NativeSolver()` | MAPDL session |
+|---|---|---|
+| Requires | nothing beyond the Python packages | licensed ANSYS MAPDL |
+| Analysis | linear static | static with large displacements (`NLGEOM`) |
+| Elements | 3-D Timoshenko beams | BEAM188, SHELL181 |
+| Fixed shells | only inside a rigid region | yes |
+| Cost per analysis | milliseconds | about a second |
+
+```python
+from beam_opt import MapdlSession
+
+with MapdlSession(run_location="mapdl_tmp", nproc=4) as mapdl:
+    problem = OptimizationProblem(mapdl, model, ...)  # same arguments
+    result = optimize(problem)
+```
+
+The built-in solver uses the BEAM188 default element orientation and returns the internal
+forces in the BEAM188 convention, so sections and stress evaluation are shared. It is
+verified against closed-form solutions (`tests/test_native.py`: straight, statically
+indeterminate and curved beams, rigid regions, symmetry); a direct comparison with MAPDL
+results has not been run yet.
 
 ### Choosing the algorithm
 
@@ -169,7 +207,7 @@ anchors, curved paths and mesh-convergence studies.
 
 | Package | Purpose |
 |---|---|
-| `ansys-mapdl-core` | MAPDL Python client |
+| `ansys-mapdl-core` | MAPDL Python client (a MAPDL licence is needed only for the MAPDL solver) |
 | `scipy` | optimisation algorithms |
 | `numpy` | numerical operations |
 | `matplotlib` | result plots (optional) |

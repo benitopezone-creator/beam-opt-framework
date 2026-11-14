@@ -34,11 +34,13 @@ limite inferiore `h ≥ 1 mm`, che aggiunge una piccola quantità di materiale.
 
 ## Esecuzione
 
-Richiede ANSYS MAPDL con licenza:
+Non richiede ANSYS: per impostazione predefinita usa il solutore interno del framework.
 
 ```bash
 python examples/01_cantilever/cantilever.py --save-plots results/cantilever
 ```
+
+Con `--solver mapdl` la stessa ottimizzazione gira su ANSYS MAPDL (serve la licenza).
 
 Opzioni principali: `--n-elem` (numero di elementi, default 50), `--n-ctrl` (punti di
 controllo, default 8), `--method` (`cobyla`, `slsqp`, `nelder-mead`,
@@ -55,9 +57,16 @@ La massa ottimizzata è di poco superiore a quella esatta, per due motivi:
 
 Entrambi gli scarti si riducono aumentando `--n-ctrl` e `--n-elem`.
 
-## Verifica senza ANSYS
+## Risultato
 
-`tests/test_example_cantilever.py` esegue la stessa ottimizzazione sostituendo MAPDL con le
-sollecitazioni esatte della trave isostatica (`StaticCantileverMapdl` in `tests/fakes.py`).
-Verifica il ciclo di ottimizzazione del framework, non MAPDL; il test con il marker
-`mapdl` nello stesso file ripete il confronto con il solutore vero.
+Con le impostazioni predefinite (solutore interno, COBYLA, 50 elementi, 8 punti di
+controllo): massa 24,09 g contro 23,70 g della soluzione esatta (+1,7 %), risparmio del
+31,9 % rispetto alla trave prismatica, tensione pari a quella ammissibile, 86 analisi.
+
+![Confronto con la soluzione esatta](../../docs/img/cantilever_comparison.png)
+
+## Test
+
+`tests/test_example_cantilever.py` ripete l'ottimizzazione con il solutore interno, con le
+sollecitazioni esatte della trave isostatica (`StaticCantileverMapdl` in `tests/fakes.py`)
+e, con il marker `mapdl`, con ANSYS MAPDL.

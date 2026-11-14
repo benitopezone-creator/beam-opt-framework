@@ -74,6 +74,11 @@ class BoxSection(Section):
     def torsion_modulus(self) -> np.ndarray:
         return 2.0 * self._enclosed_area * self.t  # Bredt: τ = T / (2 Am t)
 
+    @property
+    def shear_correction(self) -> tuple[np.ndarray, np.ndarray]:
+        # Thin-walled: the shear force is carried by the two walls parallel to it
+        return 2.0 * self.b * self.t / self.area, 2.0 * self.h * self.t / self.area
+
     def stress_points(self) -> StressPoints:
         """
         Mid-sides and corners, each corner seen from both walls that meet there.

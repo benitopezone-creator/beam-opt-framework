@@ -68,6 +68,17 @@ def test_optimum_matches_the_beam_of_uniform_strength(optimum):
     assert c["utilisation"] > 0.99  # the stress constraint is active
 
 
+def test_cantilever_example_with_the_native_solver():
+    from beam_opt import NativeSolver
+
+    problem = ex.make_problem(NativeSolver(), n_elem=50, n_ctrl=8)
+    result = ex.run(problem)
+    c = ex.comparison(problem, result.x)
+    assert result.success
+    assert c["utilisation"] <= 1.0 + 1e-3
+    assert 0.0 <= c["mass_error"] < 0.05
+
+
 @pytest.mark.mapdl
 def test_cantilever_example_with_mapdl(mapdl_session):
     problem = ex.make_problem(mapdl_session, n_elem=50, n_ctrl=8)
