@@ -48,11 +48,16 @@ from .problem import OptimizationProblem
 logger = logging.getLogger(__name__)
 
 
+class _BudgetReached(Exception):
+    """The budget of FEM solutions is exhausted: stop the algorithm."""
+
+
 class _Scaled:
     """The problem seen by the algorithms: z in [0, 1], mass relative to the heaviest design."""
 
-    def __init__(self, problem: OptimizationProblem) -> None:
+    def __init__(self, problem: OptimizationProblem, max_evals: int) -> None:
         self.problem = problem
+        self.last_solve = len(problem.history) + int(max_evals)
         self.lo = problem.lower
         self.span = problem.upper - problem.lower
         self.f_ref = problem.objective(problem.upper)
@@ -69,6 +74,8 @@ class _Scaled:
         return self.problem.objective(self.x(z)) / self.f_ref
 
     def constraints(self, z: np.ndarray) -> np.ndarray:
+        if len(self.problem.history) >= self.last_solve:
+            raise _BudgetReached
         return self.problem.constraint_vector(self.x(z))
 
 
@@ -107,7 +114,7 @@ def _slsqp(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
         method="SLSQP",
         bounds=sp.bounds,
         constraints=[{"type": "ineq", "fun": sp.constraints}],
-        tol=1e-7 if tol is None else tol,
+        tol=1e-5 if tol is None else tol,
         options=opts,
     )
 
@@ -187,7 +194,8 @@ def optimize(
         evolutionary method it is one individual of the first generation.
         Defaults to ``default_x0(problem)``.
     max_evals : int
-        Approximate budget of FEM solutions.
+        Budget of FEM solutions: the search stops when it is exhausted and
+        the best design found so far is returned (``success=False``).
     tol : float | None
         Convergence tolerance of the method, on scaled quantities [-];
         ``None`` picks a suitable default.
@@ -222,10 +230,17 @@ def optimize(
     if x0.size != problem.n_vars:
         raise ValueError(f"x0 has {x0.size} entries, expected {problem.n_vars}")
 
-    sp = _Scaled(problem)
+    sp = _Scaled(problem, max_evals)
     start = len(problem.history)
     logger.info("Starting %s  n_vars=%d  max_evals=%d", method, problem.n_vars, max_evals)
-    raw = METHODS[method](sp, np.clip(sp.z(x0), 0.0, 1.0), int(max_evals), tol, seed, options)
+    z0 = np.clip(sp.z(x0), 0.0, 1.0)
+    try:
+        raw = METHODS[method](sp, z0, int(max_evals), tol, seed, options)
+    except _BudgetReached:
+        last = problem.history[-1].x if len(problem.history) > start else x0
+        raw = OptimizeResult(
+            x=sp.z(last), success=False, message=f"budget of {max_evals} FEM solutions reached"
+        )
 
     # Lightest feasible design among those evaluated in this run (the point
     # returned by the algorithm is one of them, or is added here).

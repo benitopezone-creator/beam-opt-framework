@@ -1,0 +1,53 @@
+! Example 04 - clamped semicircular arch, written in APDL (direct generation).
+! Units: mm, N, ton, s, MPa.  Invented values.
+!
+! The same file runs in ANSYS MAPDL as it is, and is read by
+! beam_opt.apdl.read_apdl without ANSYS.
+
+/PREP7
+*AFUN,DEG
+
+! --- parameters ---------------------------------------------------------
+RAD   = 300          ! radius of the arch centre line
+NE    = 48           ! number of elements
+B0    = 12           ! section width  (local y, in the plane of the arch)
+H0    = 20           ! section height (local z, out of the plane)
+PV    = 900          ! vertical load at the crown
+PH    = 250          ! out-of-plane load at the crown
+
+! --- element type, material, section ------------------------------------
+ET,1,BEAM188
+MP,EX,1,2.0E5
+MP,PRXY,1,0.3
+MP,DENS,1,7.85E-9
+SECTYPE,1,BEAM,RECT,ARCH
+SECDATA,B0,H0
+
+! --- nodes on the arch, in the X-Y plane --------------------------------
+*DO,I,1,NE+1
+  ANG = 180*(I-1)/NE
+  N,I,RAD*COS(ANG),RAD*SIN(ANG),0
+*ENDDO
+
+! --- elements ------------------------------------------------------------
+TYPE,1 $ MAT,1 $ SECNUM,1
+*DO,I,1,NE
+  E,I,I+1
+*ENDDO
+
+! --- the beam to optimise: all the arch ---------------------------------
+ESEL,S,SEC,,1
+CM,OPT_BEAM,ELEM
+ALLSEL
+
+! --- supports and loads --------------------------------------------------
+D,1,ALL,0
+D,NE+1,ALL,0
+F,NE/2+1,FY,-PV
+F,NE/2+1,FZ,PH
+FINISH
+
+/SOLU
+ANTYPE,STATIC
+SOLVE
+FINISH
