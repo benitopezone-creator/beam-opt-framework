@@ -277,9 +277,6 @@ class NativeSolver:
         conn += [(index[fe.nodes[0]], index[fe.nodes[1]]) for fe in fixed_beams]
         conn = np.array(conn)
         length, axes = element_axes(coords[conn[:, 0]], coords[conn[:, 1]])
-        rot = np.zeros((len(conn), 12, 12))
-        for k in range(4):
-            rot[:, 3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = axes
         dofs = np.concatenate(
             [6 * conn[:, :1] + np.arange(6), 6 * conn[:, 1:] + np.arange(6)], axis=1
         )
@@ -291,7 +288,7 @@ class NativeSolver:
             "u_p": u_p,
             "null": null,
             "length": length,
-            "rot": rot,
+            "axes": axes,
             "dofs": dofs,
             "fixed_sections": [fe.section for fe in fixed_beams],
         }
@@ -335,11 +332,34 @@ class NativeSolver:
         def props(section, size: int) -> np.ndarray:
             ky, kz = section.shear_correction
             values = (section.area, section.iy, section.iz, section.torsion_constant, ky, kz)
+            values += (section.iyz,)
             return np.array([np.broadcast_to(np.asarray(v, float), (size,)) for v in values])
 
         parts = [props(model.beam.sections_at(law, mesh.s_elem), n_elem)]
         parts += [props(sec, 1) for sec in data["fixed_sections"]]
-        area, iy, iz, tors, ky, kz = np.concatenate(parts, axis=1)
+        area, iy, iz, tors, ky, kz, iyz = np.concatenate(parts, axis=1)
+
+        # Sections with a product of inertia: work in the principal axes,
+        # rotated by α about the element axis (α = 0 for symmetric sections).
+        coupled = np.abs(iyz) > 1e-12 * (iy + iz)
+        alpha = np.where(coupled, 0.5 * np.arctan2(-2.0 * iyz, iy - iz), 0.0)
+        cos, sin = np.cos(alpha), np.sin(alpha)
+        iy, iz = (
+            iy * cos**2 + iz * sin**2 - 2.0 * iyz * sin * cos,
+            iz * cos**2 + iy * sin**2 + 2.0 * iyz * sin * cos,
+        )
+        base = data["axes"]
+        axes = np.stack(
+            [
+                base[:, 0],
+                cos[:, None] * base[:, 1] + sin[:, None] * base[:, 2],
+                -sin[:, None] * base[:, 1] + cos[:, None] * base[:, 2],
+            ],
+            axis=1,
+        )
+        rot = np.zeros((len(axes), 12, 12))
+        for k in range(4):
+            rot[:, 3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = axes
 
         length = data["length"]
         if self.shear_deformation:
@@ -350,7 +370,7 @@ class NativeSolver:
         k_loc = local_stiffness(
             mat.E * area, shear_mod * tors, mat.E * iy, mat.E * iz, length, phi_y, phi_z
         )
-        rot, dofs = data["rot"], data["dofs"]
+        dofs = data["dofs"]
         k_glob = np.transpose(rot, (0, 2, 1)) @ k_loc @ rot
 
         n_dof = data["n_dof"]
@@ -374,6 +394,12 @@ class NativeSolver:
         # the +x face): minus the nodal force at I, plus the nodal force at J.
         u_loc = np.einsum("eij,ej->ei", rot[:n_elem], u[dofs[:n_elem]])
         f_loc = np.einsum("eij,ej->ei", k_loc[:n_elem], u_loc)
+        # back from the principal axes to the section axes (y, z)
+        c, s = cos[:n_elem], sin[:n_elem]
+        for iy_, iz_ in ((1, 2), (4, 5), (7, 8), (10, 11)):
+            fy, fz = f_loc[:, iy_].copy(), f_loc[:, iz_].copy()
+            f_loc[:, iy_] = c * fy - s * fz
+            f_loc[:, iz_] = s * fy + c * fz
         forces = {}
         for k, comp in enumerate(_SMISC_COMPONENT):
             forces[1 + k] = -f_loc[:, comp]

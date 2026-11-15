@@ -90,7 +90,9 @@ class RectSection(Section):
         rows.append((0, 0, 0, 0, jour, 0, 0, jour))
         return StressPoints.from_rows(rows, b.shape)
 
-    def define(self, mapdl, secnum: int, name: str) -> None:
-        mapdl.sectype(secnum, "BEAM", "RECT", name)
-        mapdl.secdata(float(self.b), float(self.h))
-        mapdl.secoffset("CENT")
+    @classmethod
+    def from_secdata(cls, *data: float) -> RectSection:
+        return cls(data[0], data[1])
+
+    def mapdl_section(self) -> tuple[str, tuple[float, ...]]:
+        return "RECT", (float(self.b), float(self.h))

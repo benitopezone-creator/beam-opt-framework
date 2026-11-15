@@ -72,6 +72,17 @@ def print_report(result, problem: OptimizationProblem) -> None:
     print(f"  Utilisation : {f_react / problem.f_react_max * 100:6.1f} %")
     print(f"  {'✓ OK' if f_react <= problem.f_react_max else '✗ VIOLATED'}")
 
+    if problem.f_react_min is not None:
+        print(f"  F_min    : {problem.f_react_min:7.4f} N")
+        print(f"  {'✓ OK' if f_react >= problem.f_react_min * (1 - 1e-4) else '✗ VIOLATED'}")
+
+    # ── Displacements ──
+    if problem.displacement_limits:
+        print("\n[DISPLACEMENT VERIFICATION]")
+        for (node, dof, lim), value in zip(problem.displacement_limits, ev.displacements):
+            ok = "✓" if abs(value) <= lim * (1 + 1e-4) else "✗"
+            print(f"  {dof} at {node!r:<12}: {value:10.4f}   limit {lim:g}   {ok}")
+
     # ── Element table ──
     law = problem.law_from_x(x_opt)
     beam = problem.model.beam

@@ -17,7 +17,7 @@ adding a shape means adding a ``Section`` subclass.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -87,6 +87,29 @@ class Section(ABC):
     def from_params(cls, params: Mapping[str, ArrayLike]) -> Section:
         """Build the section from named parameters (e.g. ``{"b": ..., "h": ...}``)."""
 
+    @classmethod
+    def with_fixed(cls, **fixed: float) -> Callable[[Mapping[str, ArrayLike]], Section]:
+        """
+        Section factory in which some parameters are constants, not design variables.
+
+        >>> beam = OptimizableBeam(mesh, section_factory=ISection.with_fixed(tw=1.0, tf=1.5))
+        >>> problem = OptimizationProblem(..., bounds={"b": (10, 40), "h": (20, 80)})
+
+        Parameters
+        ----------
+        **fixed
+            Values [mm] of the parameters that are not optimised.
+        """
+        unknown = sorted(set(fixed) - set(cls.param_names))
+        if unknown:
+            raise ValueError(f"{cls.__name__} has no parameters {unknown}: {cls.param_names}")
+        return lambda params: cls.from_params({**fixed, **params})
+
+    @classmethod
+    def from_secdata(cls, *data: float) -> Section:
+        """Build the section from the arguments of the MAPDL ``SECDATA`` command."""
+        raise NotImplementedError(f"{cls.__name__} cannot be built from SECDATA")
+
     @property
     @abstractmethod
     def area(self) -> np.ndarray:
@@ -113,6 +136,16 @@ class Section(ABC):
         """Torsional resistance modulus Wt, such that τ_T,max = |T| / Wt [mm³]."""
 
     @property
+    def iyz(self) -> np.ndarray | float:
+        """
+        Product of inertia ∫ y z dA [mm⁴]; zero when y or z is a symmetry axis.
+
+        When it is not zero, bending about y and z is coupled: the stress
+        evaluation and the built-in solver account for it.
+        """
+        return 0.0
+
+    @property
     def shear_correction(self) -> tuple[np.ndarray | float, np.ndarray | float]:
         """
         Shear correction factors (κ_y, κ_z) for shear along local y and z [-].
@@ -127,9 +160,36 @@ class Section(ABC):
         """Check points where the equivalent stress is evaluated."""
 
     @abstractmethod
+    def mapdl_section(self) -> tuple[str, tuple[float, ...]]:
+        """
+        MAPDL description of a scalar section: ``(SECTYPE subtype, SECDATA arguments)``.
+
+        Shapes without a MAPDL library equivalent return ``self.asec()``.
+        """
+
+    def asec(self) -> tuple[str, tuple[float, ...]]:
+        """
+        Description as a MAPDL arbitrary section (``SECTYPE,,BEAM,ASEC``).
+
+        ``SECDATA`` arguments: A, Iyy, Iyz, Izz, Iw, J, CGy, CGz, SHy, SHz,
+        TKz, TKy.  The warping constant is set to zero and the shear centre
+        is taken at the centroid; MAPDL does not compute stresses for such a
+        section, which is why the framework recovers them from the internal
+        forces.
+        """
+        pts = self.stress_points()
+        tky = float(np.max(pts.y) - np.min(pts.y))
+        tkz = float(np.max(pts.z) - np.min(pts.z))
+        values = (self.area, self.iy, self.iyz, self.iz, 0.0, self.torsion_constant)
+        return "ASEC", (*(float(v) for v in values), 0.0, 0.0, 0.0, 0.0, tkz, tky)
+
     def define(self, mapdl, secnum: int, name: str) -> None:
         """
-        Write the section to MAPDL (``SECTYPE``/``SECDATA``/...) as number *secnum*.
+        Write the section to MAPDL (``SECTYPE``/``SECDATA``/``SECOFFSET``) as number *secnum*.
 
         Only valid for a section holding scalar dimensions.
         """
+        subtype, data = self.mapdl_section()
+        mapdl.sectype(secnum, "BEAM", subtype, name)
+        mapdl.secdata(*data)
+        mapdl.secoffset("CENT")

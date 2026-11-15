@@ -21,7 +21,17 @@ from .native import NativeSolver
 from .optimization import CobylaDriver, OptimizationProblem, optimize
 from .post import RectBeamStressEvaluator, SectionStressEvaluator, StressEvaluator
 from .section_law import SectionLaw
-from .sections import BoxSection, CircSection, RectSection, Section, TubeSection
+from .sections import (
+    BoxSection,
+    CircSection,
+    EllipseSection,
+    ISection,
+    RectSection,
+    Section,
+    SectionShape,
+    TubeSection,
+    polygon_shape,
+)
 from .session import MapdlSession
 from .solver import SolverSettings, solve
 
@@ -32,8 +42,10 @@ __all__ = [
     "CircSection",
     "Clamp",
     "CobylaDriver",
+    "EllipseSection",
     "FixedBeam",
     "FixedShell",
+    "ISection",
     "ImposedDisplacement",
     "MapdlSession",
     "Material",
@@ -47,6 +59,7 @@ __all__ = [
     "RigidRegion",
     "Section",
     "SectionLaw",
+    "SectionShape",
     "SectionStressEvaluator",
     "SolutionNotConvergedError",
     "SolverSettings",
@@ -55,5 +68,6 @@ __all__ = [
     "Symmetry",
     "TubeSection",
     "optimize",
+    "polygon_shape",
     "solve",
 ]

@@ -110,8 +110,12 @@ class BoxSection(Section):
                 rows.append((y, z, -sz * tors, 0, flange_end, 0, 0, 0))  # wall parallel to y
         return StressPoints.from_rows(rows, b.shape)
 
-    def define(self, mapdl, secnum: int, name: str) -> None:
+    @classmethod
+    def from_secdata(cls, *data: float) -> BoxSection:
+        if len(set(data[2:6])) != 1:
+            raise NotImplementedError("BoxSection needs four equal wall thicknesses")
+        return cls(data[0], data[1], data[2])
+
+    def mapdl_section(self) -> tuple[str, tuple[float, ...]]:
         t = float(self.t)
-        mapdl.sectype(secnum, "BEAM", "HREC", name)
-        mapdl.secdata(float(self.b), float(self.h), t, t, t, t)
-        mapdl.secoffset("CENT")
+        return "HREC", (float(self.b), float(self.h), t, t, t, t)

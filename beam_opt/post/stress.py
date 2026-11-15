@@ -95,7 +95,8 @@ class SectionStressEvaluator(StressEvaluator):
     At both nodes of every element, and at every check point of the section
     (``Section.stress_points``):
 
-        σ_x  = N/A + My·z/Iy − Mz·y/Iz
+        σ_x  = N/A + My·z/Iy − Mz·y/Iz      (general form with Iyz ≠ 0:
+               N/A + [(My·Iz + Mz·Iyz)·z − (Mz·Iy + My·Iyz)·y] / (Iy·Iz − Iyz²))
         τ    = vector sum of the torsion and shear-force stresses
         σ_VM = sqrt(σ_x² + 3 τ²)
 
@@ -139,12 +140,13 @@ class SectionStressEvaluator(StressEvaluator):
         mesh = beam.mesh
         section = beam.sections_at(law, mesh.s_elem)
         pts = section.stress_points()
-        area, iy, iz = section.area, section.iy, section.iz
+        area, iy, iz, iyz = section.area, section.iy, section.iz, section.iyz
+        det = iy * iz - iyz**2
 
         sigma = np.zeros(mesh.n_elem)
         for first in _FIRST_RESULTANT:
             n, my, mz, tq, vz, vy = (sm[first + k] for k in range(6))
-            sx = n / area + my * pts.z / iy - mz * pts.y / iz
+            sx = n / area + (my * iz + mz * iyz) * pts.z / det - (mz * iy + my * iyz) * pts.y / det
             txy = pts.ty_t * tq + pts.ty_vy * vy + pts.ty_vz * vz
             txz = pts.tz_t * tq + pts.tz_vy * vy + pts.tz_vz * vz
             vm = np.sqrt(sx**2 + 3.0 * (txy**2 + txz**2))  # (n_points, n_elem)

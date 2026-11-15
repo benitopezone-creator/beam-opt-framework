@@ -111,10 +111,12 @@ class TubeSection(Section):
             )
         return StressPoints.from_rows(rows, r.shape)
 
-    def define(self, mapdl, secnum: int, name: str) -> None:
-        mapdl.sectype(secnum, "BEAM", "CTUBE", name)
-        mapdl.secdata(float(self.r_inner), float(self.r))
-        mapdl.secoffset("CENT")
+    @classmethod
+    def from_secdata(cls, *data: float) -> TubeSection:
+        return cls(data[1], data[1] - data[0])  # SECDATA, Ri, Ro
+
+    def mapdl_section(self) -> tuple[str, tuple[float, ...]]:
+        return "CTUBE", (float(self.r_inner), float(self.r))
 
 
 class CircSection(TubeSection):
@@ -136,7 +138,9 @@ class CircSection(TubeSection):
     def from_params(cls, params: Mapping[str, ArrayLike]) -> CircSection:
         return cls(params["r"])
 
-    def define(self, mapdl, secnum: int, name: str) -> None:
-        mapdl.sectype(secnum, "BEAM", "CSOLID", name)
-        mapdl.secdata(float(self.r))
-        mapdl.secoffset("CENT")
+    @classmethod
+    def from_secdata(cls, *data: float) -> CircSection:
+        return cls(data[0])
+
+    def mapdl_section(self) -> tuple[str, tuple[float, ...]]:
+        return "CSOLID", (float(self.r),)

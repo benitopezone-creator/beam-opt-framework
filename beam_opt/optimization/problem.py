@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -31,6 +31,8 @@ from .history import HistoryWriter
 logger = logging.getLogger(__name__)
 
 TON_TO_G = 1e6
+
+_DOFS = ("UX", "UY", "UZ", "ROTX", "ROTY", "ROTZ")
 
 #: Number of FEM evaluations kept in the cache (a population-based method
 #: asks for the constraints of a whole generation before the objective).
@@ -55,6 +57,8 @@ class Evaluation:
     failed : bool
         ``True`` if the FEM solution did not converge: ``sigma`` and
         ``reaction`` are then penalty values, not results.
+    displacements : ndarray
+        Displacement of every entry of ``displacement_limits`` [mm] or [rad].
     """
 
     x: np.ndarray
@@ -62,6 +66,7 @@ class Evaluation:
     sigma: np.ndarray
     reaction: float
     failed: bool = False
+    displacements: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
 
 class OptimizationProblem:
@@ -86,6 +91,13 @@ class OptimizationProblem:
         Maximum admissible resultant reaction [N].
     reaction_nodes : list[str]
         Names of the nodes whose reactions are summed.
+    f_react_min : float | None
+        Minimum resultant reaction [N], e.g. the clamping force that a
+        spring must still give under an imposed displacement.
+    displacement_limits : list[tuple[str, str, float]] | None
+        Stiffness constraints ``(node name, DOF, limit)``: the absolute value
+        of the displacement (``"UX"``, ``"UY"``, ``"UZ"`` [mm]) or rotation
+        (``"ROTX"``, ``"ROTY"``, ``"ROTZ"`` [rad]) must not exceed the limit.
     evaluator : StressEvaluator | None
         Defaults to ``SectionStressEvaluator()``, valid for every ``Section``.
     settings : SolverSettings | None
@@ -115,6 +127,8 @@ class OptimizationProblem:
         safety_factor: float,
         f_react_max: float,
         reaction_nodes: list[str],
+        f_react_min: float | None = None,
+        displacement_limits: list[tuple[str, str, float]] | None = None,
         evaluator: StressEvaluator | None = None,
         settings: SolverSettings | None = None,
         interpolator: str = "natural_cubic",
@@ -135,6 +149,14 @@ class OptimizationProblem:
         self.sigma_adm = model.material.sigma_y / float(safety_factor)
         self.f_react_max = float(f_react_max)
         self.reaction_nodes = list(reaction_nodes)
+        self.f_react_min = None if f_react_min is None else float(f_react_min)
+        self.displacement_limits = [
+            (str(node), str(dof).upper(), float(lim))
+            for node, dof, lim in displacement_limits or []
+        ]
+        for node, dof, lim in self.displacement_limits:
+            if node not in model.node_names() or dof not in _DOFS or lim <= 0.0:
+                raise ValueError(f"invalid displacement limit {(node, dof, lim)}")
         self.evaluator = evaluator or SectionStressEvaluator()
         if self.native and not hasattr(self.evaluator, "from_forces"):
             raise TypeError(
@@ -215,7 +237,7 @@ class OptimizationProblem:
         law = self.law_from_x(x)
         mass = self.model.beam.mass(law, self.model.material.rho)
         try:
-            sigma, reaction = self._solve(law)
+            sigma, reaction, disp = self._solve(law)
         except SolutionNotConvergedError as err:
             if self.on_failure == "raise":
                 raise
@@ -226,9 +248,10 @@ class OptimizationProblem:
                 np.full(self.model.beam.mesh.n_elem, self.failure_penalty * self.sigma_adm),
                 self.failure_penalty * self.f_react_max,
                 failed=True,
+                displacements=self.failure_penalty * self._disp_limits,
             )
         else:
-            ev = Evaluation(x.copy(), mass, sigma, reaction)
+            ev = Evaluation(x.copy(), mass, sigma, reaction, displacements=disp)
 
         self.history.append(ev)
         self._cache[key] = ev
@@ -238,11 +261,22 @@ class OptimizationProblem:
             self._writer.write(ev, self.max_violation(ev))
         return ev
 
-    def _solve(self, law: SectionLaw) -> tuple[np.ndarray, float]:
-        """Element stresses [MPa] and reaction [N] for section law *law*."""
+    @property
+    def _disp_limits(self) -> np.ndarray:
+        return np.array([lim for _, _, lim in self.displacement_limits])
+
+    def _solve(self, law: SectionLaw) -> tuple[np.ndarray, float, np.ndarray]:
+        """Element stresses [MPa], reaction [N] and limited displacements for *law*."""
         if self.native:
             res = self.mapdl.analyze(self.model, law, self.reaction_nodes)
-            return self.evaluator.from_forces(res.forces, self.model.beam, law), res.reaction
+            sigma = self.evaluator.from_forces(res.forces, self.model.beam, law)
+            disp = np.array(
+                [
+                    res.displacements[res.node_index[node], _DOFS.index(dof)]
+                    for node, dof, _ in self.displacement_limits
+                ]
+            )
+            return sigma, res.reaction, disp
 
         m = self.mapdl
         ids = self.builder.build(self.model, law)
@@ -251,7 +285,13 @@ class OptimizationProblem:
             sigma = self.evaluator(m, self.model.beam, law)
         with last_results(m):
             reaction = reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
-        return sigma, reaction
+            disp = np.array(
+                [
+                    m.get_value("NODE", ids[node], "ROT" if dof.startswith("ROT") else "U", dof[-1])
+                    for node, dof, _ in self.displacement_limits
+                ]
+            )
+        return sigma, reaction, disp
 
     # ------------------------------------------------------------------
     # Objective
@@ -303,6 +343,24 @@ class OptimizationProblem:
         """Reaction constraint F_react ≤ F_react_max [-]."""
         return 1.0 - self.evaluate(x).reaction / self.f_react_max
 
+    def constraint_reaction_min(self, x: np.ndarray) -> float:
+        """Reaction constraint F_react ≥ F_react_min [-] (1 if no minimum is set)."""
+        if self.f_react_min is None:
+            return 1.0
+        return self.evaluate(x).reaction / self.f_react_min - 1.0
+
+    def constraint_displacement(self, x: np.ndarray) -> np.ndarray:
+        """Stiffness constraints |u| ≤ limit, one per entry of ``displacement_limits`` [-]."""
+        return 1.0 - np.abs(self.evaluate(x).displacements) / self._disp_limits
+
+    def _extra_constraints(self, ev: Evaluation) -> list:
+        g = []
+        if self.f_react_min is not None:
+            g.append([ev.reaction / self.f_react_min - 1.0])
+        if self.displacement_limits:
+            g.append(1.0 - np.abs(ev.displacements) / self._disp_limits)
+        return g
+
     @property
     def needs_field_constraint(self) -> bool:
         """Whether the section law can leave the bounds between control points."""
@@ -312,11 +370,13 @@ class OptimizationProblem:
         """
         All non-bound constraints in one vector (>= 0 when satisfied) [-].
 
-        Stress per element, reaction and, only for interpolators that can
-        overshoot, the section field.  The box bounds on the design variables
-        are not included: pass ``lower``/``upper`` to the optimiser.
+        Stress per element, reaction, the optional minimum reaction and
+        displacement limits and, only for interpolators that can overshoot,
+        the section field.  The box bounds on the design variables are not
+        included: pass ``lower``/``upper`` to the optimiser.
         """
         parts = [self.constraint_stress(x), [self.constraint_reaction(x)]]
+        parts += self._extra_constraints(self.evaluate(x))
         if self.needs_field_constraint:
             parts.append(self.constraint_section_field(x))
         return np.concatenate(parts)
@@ -333,6 +393,7 @@ class OptimizationProblem:
             [1.0 - ev.reaction / self.f_react_max],
             (ev.x - self.lower) / span,
             (self.upper - ev.x) / span,
+            *self._extra_constraints(ev),
         ]
         if self.needs_field_constraint:
             g.append(self.constraint_section_field(ev.x))
