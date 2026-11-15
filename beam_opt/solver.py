@@ -10,11 +10,16 @@ import logging
 import os
 from dataclasses import dataclass
 
-from ansys.mapdl.core.errors import MapdlRuntimeError
-
 from .exceptions import SolutionNotConvergedError
 
 logger = logging.getLogger(__name__)
+
+try:
+    from ansys.mapdl.core.errors import MapdlRuntimeError
+except ImportError:  # MAPDL client not installed (optional dependency)
+
+    class MapdlRuntimeError(RuntimeError):
+        """Placeholder for ``ansys.mapdl.core.errors.MapdlRuntimeError``."""
 
 
 @dataclass

@@ -25,9 +25,24 @@ import atexit
 import logging
 import os
 
-from ansys.mapdl.core import launch_mapdl
-
 logger = logging.getLogger(__name__)
+
+
+def launch_mapdl(**kwargs):
+    """
+    ``ansys.mapdl.core.launch_mapdl``, imported only when MAPDL is requested.
+
+    The MAPDL client is an optional dependency: the built-in solver
+    (``beam_opt.native``) works without it.
+    """
+    try:
+        from ansys.mapdl.core import launch_mapdl as _launch
+    except ImportError as err:
+        raise ImportError(
+            "the MAPDL client is not installed: pip install 'beam-opt-framework[mapdl]' "
+            "(or use beam_opt.NativeSolver, which needs no ANSYS)"
+        ) from err
+    return _launch(**kwargs)
 
 
 class MapdlSession:

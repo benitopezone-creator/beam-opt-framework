@@ -1,24 +1,56 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "beam-opt-framework"
-version = "0.2.0.dev0"
-description = "Dimensional optimisation framework for complex beam structures via ANSYS MAPDL"
+version = "0.2.0"
+description = "Size optimisation of curved 3-D beam structures: built-in beam solver or ANSYS MAPDL, selectable algorithms, APDL import/export"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Benito Pezone" }]
+keywords = [
+    "structural optimization",
+    "size optimization",
+    "beam",
+    "finite element method",
+    "curved beam",
+    "ANSYS",
+    "MAPDL",
+    "APDL",
+    "PyMAPDL",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 dependencies = [
-    "ansys-mapdl-core>=0.68",
     "scipy>=1.11",
     "numpy>=1.25",
     "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy"]
+# ANSYS MAPDL client: only needed to solve with MAPDL instead of the built-in solver
+mapdl = ["ansys-mapdl-core>=0.68"]
+dev = ["pytest", "ruff", "mypy", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/benitopezone-creator/beam-opt-framework"
+Repository = "https://github.com/benitopezone-creator/beam-opt-framework"
+Changelog = "https://github.com/benitopezone-creator/beam-opt-framework/blob/main/CHANGELOG.md"
+Issues = "https://github.com/benitopezone-creator/beam-opt-framework/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
