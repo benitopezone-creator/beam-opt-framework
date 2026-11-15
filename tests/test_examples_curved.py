@@ -151,7 +151,9 @@ def test_arch_is_optimised_and_written_back(tmp_path):
 def test_budget_of_fem_solutions_is_a_hard_limit():
     imp = arch.load()
     problem = arch.make_problem(imp, n_ctrl=5)
-    result = optimize(problem, "slsqp", x0=imp.x0(problem), max_evals=60)
+    # maxiter is raised so that only the budget can stop the search, whatever
+    # the iteration count that the installed SciPy would derive from it
+    result = optimize(problem, "slsqp", x0=imp.x0(problem), max_evals=60, maxiter=1000)
     assert result.nfev <= 61
     assert not result.success and "budget" in result.message
     assert isinstance(problem.mapdl, NativeSolver)
