@@ -17,7 +17,7 @@ until the structure is as light as the stress, stiffness and reaction-force limi
 - **Choose the algorithm by name**: gradient-based, derivative-free, simplex or
   evolutionary.
 
-![Helical tube beam optimised for minimum mass](docs/img/helix_design.png)
+![Helical tube beam optimised for minimum mass](https://raw.githubusercontent.com/benitopezone-creator/beam-opt-framework/main/docs/img/helix_design.png)
 
 *A helical tube propped by a strut, optimised under a stress and a deflection limit: the
 optimiser thins the part that the strut relieves and puts the material just beyond it —
@@ -90,9 +90,9 @@ points along the arc length: the same problem runs unchanged with 10 or 400 elem
 
 | | |
 |---|---|
-| [**01 — Cantilever of uniform strength**](examples/01_cantilever)<br>Validation against the closed-form optimum: mass within 1.7 %, 32 % lighter than the prismatic beam. | ![](docs/img/cantilever_comparison.png) |
-| [**02 — C-shaped spring clip**](examples/02_c_spring)<br>A planar curved beam opened by an *imposed displacement*, with a minimum grip force. No constant thickness is admissible; the optimised one is, and is 16 % lighter. | ![](docs/img/c_spring_design.png) |
-| [**03 — Helical tube beam**](examples/03_helix)<br>Bending about two axes, torsion and shear together, statically indeterminate; stress and deflection limits. 41 % lighter. | ![](docs/img/helix_design.png) |
+| [**01 — Cantilever of uniform strength**](examples/01_cantilever)<br>Validation against the closed-form optimum: mass within 1.7 %, 32 % lighter than the prismatic beam. | ![](https://raw.githubusercontent.com/benitopezone-creator/beam-opt-framework/main/docs/img/cantilever_comparison.png) |
+| [**02 — C-shaped spring clip**](examples/02_c_spring)<br>A planar curved beam opened by an *imposed displacement*, with a minimum grip force. No constant thickness is admissible; the optimised one is, and is 16 % lighter. | ![](https://raw.githubusercontent.com/benitopezone-creator/beam-opt-framework/main/docs/img/c_spring_design.png) |
+| [**03 — Helical tube beam**](examples/03_helix)<br>Bending about two axes, torsion and shear together, statically indeterminate; stress and deflection limits. 41 % lighter. | ![](https://raw.githubusercontent.com/benitopezone-creator/beam-opt-framework/main/docs/img/helix_design.png) |
 | [**04 — From an APDL script to an optimised APDL script**](examples/04_apdl_arch)<br>A clamped arch written in APDL is read, optimised (60 % lighter) and written back. | `arch.inp` → `arch_optimised.inp` |
 
 ## What you can model
