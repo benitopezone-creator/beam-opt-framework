@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.2.0] – 2026-11
+
+First packaged release. It collects everything below marked *Unreleased* (Phases 0–4, the
+built-in solver, continuous integration) plus the following.
+
+### Added — cross-sections
+- `sections.ISection` (MAPDL `I`) and `sections.EllipseSection` (written as `ASEC`).
+- User-defined shapes: `sections.polygon_shape(vertices)` builds a section from any solid
+  polygonal outline (area, centroid, inertias and product of inertia from the outline;
+  Saint-Venant torsion solved numerically with linear triangles; Jourawski shear), and
+  `SectionShape.from_properties(...)` from known properties. Both are scaled uniformly by
+  the design parameter `scale`.
+- `Section.iyz`: product of inertia, handled by the stress evaluator (general bending
+  formula) and by the built-in solver (element formulated in the principal axes).
+- `Section.with_fixed(**values)`: keep some section parameters constant.
+- `Section.mapdl_section()`, `Section.from_secdata()`, `Section.asec()` and
+  `sections.MAPDL_SUBTYPES`; `Section.define()` is now common to all shapes.
+
+### Added — constraints
+- `OptimizationProblem(f_react_min=...)`: minimum reaction force (e.g. the grip of a spring
+  under an imposed displacement).
+- `OptimizationProblem(displacement_limits=[(node, dof, limit), ...])`: stiffness
+  constraints on displacements and rotations, with both solvers.
+
+### Added — APDL
+- `apdl.read_apdl`: builds a `StructuralModel` from an APDL script interpreted as text
+  (parameters, expressions, `*DO` loops, `ET`, `MP`, `SECTYPE`/`SECDATA`, `N`, `E`, `EN`,
+  `NSEL`, `ESEL`, `CM`, `D`, `F`, `DSYM`, `CERIG`); the beam to optimise is the element
+  component `OPT_BEAM`. Unsupported commands raise `ApdlError` with the line number.
+- `apdl.write_apdl`: writes a design as an APDL input file (the commands sent to MAPDL,
+  the `OPT_BEAM` component and a solution block); it can be read back.
+
+### Added — examples and documentation
+- `examples/02_c_spring` (curved clip under an imposed displacement), `examples/03_helix`
+  (helical tube with a strut, stress and deflection limits), `examples/04_apdl_arch`
+  (APDL script in, optimised APDL script out), each with a README and tests.
+- `docs/teoria.md`, `docs/apdl.md`, new README with an example gallery, `CITATION.cff`.
+
+### Changed
+- The MAPDL client (`ansys-mapdl-core`) is an optional dependency:
+  `pip install "beam-opt-framework[mapdl]"`. The package imports and runs without it.
+- `optimize(max_evals=...)` is a hard budget for every method: when it is exhausted the
+  best design found is returned with `success=False`.
+- Default SLSQP tolerance relaxed from 1e-7 to 1e-5: with the tighter value it could stall
+  at the optimum without terminating (arch example: 6000 analyses instead of 540).
+- Packaging metadata for PyPI (classifiers, keywords, URLs, SPDX licence); release
+  workflow `.github/workflows/release.yml`.
+
+### Not done
+- Comparison of the built-in solver with MAPDL on the same model, and execution of the
+  `mapdl`-marked tests: no ANSYS installation was available.
+- APDL solid modelling, `*IF` and user-mesh sections (`.SECT` files) are not read.
+
 ## [Unreleased] – Continuous integration
 
 ### Added

@@ -187,6 +187,14 @@ di questo modulo è la parte 3–4 (cosa ottimizzare e come parametrizzarlo).
 **Accettazione.** Esempio: script APDL della trave a sbalzo → config generata → stessa
 soluzione dell'esempio scritto a mano.
 
+*Stato:* implementata con un approccio diverso da quello consigliato sopra. Poiché ANSYS
+non era disponibile, `beam_opt.apdl.read_apdl` interpreta lo script come testo (parametri,
+espressioni, `*DO`, nodi, elementi, sezioni, selezioni, vincoli, carichi) invece di
+eseguirlo in MAPDL; `write_apdl` scrive il progetto ottimizzato. Funziona senza licenza ed è
+verificata con un giro completo esportazione → importazione. Restano fuori modellazione
+solida, `*IF`, macro e sezioni a mesh utente: per questi casi la via "esegui in MAPDL e
+leggi la mesh" descritta sopra è ancora da fare.
+
 ---
 
 ## Fase 7 — Solutore interno (framework senza ANSYS)
@@ -214,6 +222,23 @@ gradienti analitici (metodo aggiunto) per `slsqp`, non linearità geometrica, re
   una sezione e un vincolo.
 - GitHub Actions: lint + `pytest -m "not mapdl"` a ogni push.
 
-*Stato:* fatto l'esempio 01 (trave a sbalzo), eseguibile con il solutore interno. Da fare:
-esempio 02 (telaio curvo), documentazione di teoria. GitHub Actions attivo
-(`.github/workflows/ci.yml`: lint e test senza ANSYS su Python 3.10 e 3.12).
+*Stato:* fatti quattro esempi eseguibili con il solutore interno (01 trave a sbalzo, 02
+molla a C a spostamento imposto, 03 elica con puntone, 04 arco da script APDL), la
+documentazione di teoria (`docs/teoria.md`) e la guida APDL (`docs/apdl.md`). GitHub Actions
+attivo (`.github/workflows/ci.yml`).
+
+---
+
+## Fase 8 — Sezioni e vincoli aggiuntivi
+
+*Stato:* fatti il profilo a I, l'ellisse, le sezioni personalizzate (`polygon_shape`,
+`SectionShape.from_properties`), il prodotto d'inerzia, i vincoli su spostamento e reazione
+minima.
+
+Idee per il seguito:
+- più travi ottimizzabili nello stesso modello e più casi di carico;
+- vincoli di instabilità e di frequenza propria;
+- sezioni aperte non simmetriche (C, L, T) con centro di taglio distinto dal baricentro;
+- gradienti analitici (metodo aggiunto) nel solutore interno;
+- dimensioni scelte da un catalogo di profili commerciali;
+- lettura delle sezioni a mesh utente di MAPDL (`.SECT`).

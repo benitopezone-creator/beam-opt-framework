@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "beam-opt-framework: size optimisation of curved 3-D beam structures"
+type: software
+authors:
+  - family-names: Pezone
+    given-names: Benito
+version: 0.2.0
+license: MIT
+repository-code: "https://github.com/benitopezone-creator/beam-opt-framework"
+keywords:
+  - structural optimization
+  - size optimization
+  - curved beams
+  - finite element method
+  - ANSYS MAPDL
+  - APDL
+abstract: >-
+  Python framework for the size optimisation of curved three-dimensional beam
+  structures. The cross-section dimensions vary along the arc length and are
+  optimised for minimum mass under stress, stiffness and reaction-force
+  constraints, with a built-in beam solver or ANSYS MAPDL, selectable
+  optimisation algorithms and APDL import/export.
