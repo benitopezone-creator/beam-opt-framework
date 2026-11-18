@@ -184,8 +184,7 @@ def test_maximum_fatigue_life_at_given_mass():
     )
     body = np.log10(lives[: int(0.8 * len(lives))])
     assert np.ptp(body) < 0.02  # every element has the same life
-    assert result.fun >= -np.log10(lives.min())  # the KS envelope is conservative
-    assert result.fun == pytest.approx(-np.log10(lives.min()), abs=0.1)
+    assert result.fun == pytest.approx(-np.log10(lives.min()), abs=1e-9)  # value = worst element
 
 
 def test_minimum_mass_for_a_required_fatigue_life():

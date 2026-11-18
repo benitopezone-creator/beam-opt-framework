@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] – Objectives other than mass (local, not published)
+
+### Added
+- `OptimizationProblem(objective=...)` with `optimization.objectives`: `Mass` (default),
+  `Compliance` (stiffness), `Displacement`, `PeakStress`, `FatigueLife`, `WeightedSum`.
+- Min-max objectives (`PeakStress`, `FatigueLife`) are solved in bound form by SLSQP and
+  COBYLA (min τ subject to value_e ≤ τ): robust convergence from any starting point.
+- `beam_opt.fatigue`: `StrainLifeCurve` and `FatigueModel`, low-cycle fatigue by the local
+  strain approach (Neuber, Masing, Manson-Coffin-Basquin, SWT or Morrow mean stress).
+- Constraints `mass_max` (mass budget) and `life_min` (fatigue life of every element).
+- `optimization.epsilon_constraint`: Pareto fronts between two goals.
+- `examples/05_stiffness_pareto` (stiffness against mass of the helix) and
+  `examples/06_lcf_clip` (grip force against low-cycle fatigue life of the clip).
+- `docs/teoria.md`: sections on objectives, Pareto fronts and low-cycle fatigue.
+
+### Changed
+- `safety_factor=None` removes the stress constraint; `f_react_max` and `reaction_nodes`
+  are optional.
+- `optimize` returns the best feasible design by objective value, not by mass; the
+  history CSV has an `objective` column, used by `best_design`.
+- A failed FEM evaluation is always infeasible.
+- `examples/02_c_spring/c_spring.build_model` takes the opening as an argument.
+
 ## [0.2.0] – 2026-11
 
 First packaged release. It collects everything below marked *Unreleased* (Phases 0–4, the

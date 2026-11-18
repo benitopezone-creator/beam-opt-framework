@@ -4,19 +4,23 @@ Formulazione, ipotesi e formule usate dal framework. Unità: mm, N, ton, s, MPa.
 
 ## 1. Il problema di ottimizzazione
 
-Si cerca la distribuzione delle dimensioni della sezione lungo la trave che minimizza la
-massa rispettando i vincoli:
+Si cerca la distribuzione delle dimensioni della sezione lungo la trave che minimizza un
+obiettivo rispettando i vincoli:
 
 ```
-min   m(x) = ρ Σ_e A_e(x) L_e
-x
-t.c.  σ_VM,e(x) ≤ σ_y / FS              per ogni elemento e
+min   f(x)                              massa (predefinito), cedevolezza, spostamento,
+x                                       tensione di picco, −log10 della vita a fatica
+t.c.  σ_VM,e(x) ≤ σ_y / FS              per ogni elemento e (facoltativo)
       F_min ≤ F_reaz(x) ≤ F_max         reazione sui nodi scelti
       |u_k(x)| ≤ u_k,max                spostamenti o rotazioni scelti
+      m(x) ≤ m_max                      budget di massa
+      N_e(x) ≥ N_min                    vita a fatica di ogni elemento
       x_min ≤ x ≤ x_max                 limiti tecnologici
 ```
 
 È un'ottimizzazione **dimensionale**: la linea d'asse non cambia, cambiano le sezioni.
+Quando l'obiettivo non è la massa serve di norma un budget di massa, altrimenti l'ottimo
+è semplicemente la trave più pesante.
 
 ## 2. Variabili di progetto: la legge di sezione
 
@@ -125,7 +129,88 @@ soluzione si calcola una sola volta alla scala unitaria; scalando la sezione di 
 sottostimata di circa l'1 % su quadrato, triangolo equilatero ed ellisse. Vale per sezioni
 piene; il picco teorico negli spigoli rientranti non è risolto.
 
-## 6. Algoritmi
+## 6. Obiettivi diversi dalla massa
+
+| Obiettivo | Definizione | Uso tipico |
+|---|---|---|
+| `Mass()` | `m = ρ Σ A_e L_e` | alleggerimento (predefinito) |
+| `Compliance()` | `C = Σ F_i u_i`, lavoro dei carichi nodali | massima rigidezza a massa data |
+| `Displacement(nodo, gdl)` | `|u|` in un nodo | rigidezza in un punto preciso |
+| `PeakStress()` | `max_e σ_VM,e / σ_adm` | resistenza uniforme a massa data |
+| `FatigueLife()` | `max_e log10(1/N_e)`, cioè la vita minima | durata a massa o rigidezza data |
+| `WeightedSum([...])` | `Σ w_k f_k / f_k,rif` | compromesso tra più obiettivi |
+
+### Formulazione a epigrafe per i problemi min-max
+
+Tensione di picco e vita minima sono il **peggiore** dei valori per elemento: la funzione
+`max_e g_e(x)` ha un gradiente discontinuo, perché l'elemento critico cambia mentre
+l'ottimizzatore si muove. Con SLSQP e COBYLA il framework risolve quindi il problema
+equivalente
+
+```
+min τ     t.c.   g_e(x) ≤ τ   per ogni elemento e
+x, τ
+```
+
+in cui ogni funzione è liscia. Sulla clip dell'esempio 06, la forma diretta (anche
+smussata con l'inviluppo KS) portava SLSQP a fermarsi su soluzioni diverse a seconda del
+punto di partenza; con l'epigrafe tutti i punti di partenza convergono allo stesso ottimo,
+con 5-10 volte meno analisi.
+
+### Fronti di Pareto
+
+Due obiettivi in conflitto si studiano con il metodo **epsilon-constraint**
+(`epsilon_constraint`): si ottimizza il primo imponendo un limite al secondo, e si fa
+variare il limite. A differenza della somma pesata trova anche i tratti non convessi del
+fronte. Ogni ottimizzazione parte dall'ottimo precedente.
+
+### Verifica sulla trave a sbalzo
+
+Per la mensola isostatica a larghezza costante, a parità di massa, minima cedevolezza,
+minima freccia, minima tensione di picco e massima vita a fatica portano tutte allo
+stesso profilo `h(s) ∝ sqrt(L − s)`, la trave a uniforme resistenza. Rispetto alla trave
+prismatica della stessa massa la cedevolezza si riduce di un fattore 27/16. I test lo
+verificano: l'ottimizzatore arriva entro lo 0,3 % dalla soluzione discreta esatta.
+
+## 7. Fatica oligociclica: approccio locale in deformazione
+
+L'analisi è lineare e fornisce la tensione *elastica* `S` al picco del ciclo di carico.
+La risposta elasto-plastica nel punto critico si ricava così:
+
+```
+curva ciclica         ε = σ/E + (σ/K')^(1/n')                         (Ramberg-Osgood)
+Neuber, picco         σ_max ε_max = (K_t S_max)² / E
+Neuber, escursione    Δσ Δε = (K_t ΔS)² / E,   Δε = Δσ/E + 2 (Δσ/2K')^(1/n')   (Masing)
+deformazione-vita     ε_a = σ'_f/E (2N)^b + ε'_f (2N)^c               (Manson-Coffin-Basquin)
+```
+
+con `ΔS = (1 − R) S_max`, `ε_a = Δε/2`, `σ_a = Δσ/2`, `σ_m = σ_max − σ_a`. La tensione
+media si considera con Smith-Watson-Topper
+
+```
+σ_max ε_a = σ'_f²/E (2N)^(2b) + σ'_f ε'_f (2N)^(b+c)
+```
+
+oppure con Morrow, `ε_a = (σ'_f − σ_m)/E (2N)^b + ε'_f (2N)^c`. La vita si ottiene per
+bisezione su `log10(2N)` tra 0 e 12; oltre `2N = 10¹²` si considera vita infinita.
+
+Ipotesi:
+
+- **Carico proporzionale** tra `R·P` e `P`: ogni punto scala con il carico, quindi una
+  sola analisi lineare al picco descrive l'intero ciclo. Vale sia per forze sia per
+  spostamenti imposti.
+- **Tensione equivalente di von Mises presa positiva**: conservativo nei punti compressi
+  quando conta la tensione media.
+- **Plasticità localizzata**: la regola di Neuber non redistribuisce le sollecitazioni
+  nella struttura, ipotesi valida finché lo snervamento resta limitato a zone piccole.
+- Un solo tipo di ciclo (ampiezza costante). Lo spettro di carico con la regola di Miner
+  è un'estensione naturale.
+
+I test verificano la regola di Neuber, la coincidenza con Basquin in campo elastico per
+tutte e tre le correzioni, il giro completo sulla curva di Manson-Coffin in campo plastico
+e l'effetto della tensione media.
+
+## 8. Algoritmi
 
 Tutti lavorano su variabili scalate in `[0, 1]` e sulla massa divisa per quella del
 progetto più pesante. Viene sempre restituito il progetto ammissibile più leggero tra
@@ -142,7 +227,7 @@ Un'analisi non convergente diventa un progetto marcato come fallito, con tension
 reazioni pari a un multiplo dei valori ammissibili: l'algoritmo se ne allontana senza
 interrompersi, e il progetto non può essere restituito come ottimo.
 
-## 7. Ipotesi e limiti
+## 9. Ipotesi e limiti
 
 - Materiale elastico lineare isotropo; verifica alla tensione di von Mises in campo
   elastico. Instabilità, fatica e concentrazioni di tensione non sono considerate.

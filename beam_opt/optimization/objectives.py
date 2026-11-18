@@ -11,8 +11,17 @@ Every objective is a value to *minimise*, computed from an ``Evaluation``.
 When the objective is not the mass, a mass budget (``mass_max``) is
 usually needed, otherwise the optimum is simply the heaviest design.
 
-To add an objective, subclass ``Objective`` and implement ``value``; list
-in ``watch`` the nodal displacements it needs.
+Min-max objectives (the worst element: ``PeakStress``, ``FatigueLife``)
+also give one value per element (``values``).  The gradient-based and
+simplex-based algorithms then solve the equivalent *bound formulation*
+
+    min τ   subject to   value_e(x) ≤ τ   for every element e
+
+whose functions are smooth, instead of the non-smooth maximum.
+
+To add an objective, subclass ``Objective`` and implement ``value`` (and
+``values`` for a min-max objective); list in ``watch`` the nodal
+displacements it needs.
 """
 
 from __future__ import annotations
@@ -51,6 +60,14 @@ class Objective(ABC):
     def watch(self, problem) -> list[tuple[str, str]]:
         """Nodal displacements ``(node, dof)`` the objective needs."""
         return []
+
+    def values(self, problem, ev) -> np.ndarray | None:
+        """
+        Per-element values of a min-max objective (``value`` is their maximum).
+
+        ``None`` for an ordinary scalar objective.
+        """
+        return None
 
     def check(self, problem) -> None:
         """Raise ``ValueError`` if the objective does not apply to *problem*."""
@@ -142,22 +159,17 @@ class PeakStress(Objective):
     """
     Peak equivalent stress over the beam, as a fraction of σ_adm [-].
 
-    Aggregated with the KS envelope (``ks_max``) so that the optimiser sees
-    a smooth function instead of the maximum over the elements.
-
-    Parameters
-    ----------
-    rho : float
-        KS aggregation parameter [-].
+    A min-max objective: the stress of every element is bounded by the
+    optimisation variable τ (see the module docstring).
     """
 
     name, unit = "peak stress / σ_adm", "-"
 
-    def __init__(self, rho: float = 200.0) -> None:
-        self.rho = float(rho)
+    def values(self, problem, ev) -> np.ndarray:
+        return ev.sigma / problem.sigma_adm
 
     def value(self, problem, ev) -> float:
-        return ks_max(ev.sigma / problem.sigma_adm, self.rho)
+        return float(np.max(self.values(problem, ev)))
 
     def describe(self, problem, ev) -> str:
         return f"peak stress: {float(np.max(ev.sigma)):.4g} MPa ({np.max(ev.sigma) / problem.sigma_adm:.1%} of σ_adm)"
@@ -168,26 +180,21 @@ class FatigueLife(Objective):
     Fatigue life of the beam, maximised: the value is ``−log10(N_min)`` [-].
 
     ``N_min`` is the life of the critical element, from the problem's
-    ``FatigueModel``; the minimum over the elements is smoothed with the KS
-    envelope on ``log10(1/N)``.
-
-    Parameters
-    ----------
-    rho : float
-        KS aggregation parameter on decades of life [-].
+    ``FatigueModel``.  A min-max objective on ``log10(1/N)`` per element
+    (see the module docstring).
     """
 
     name, unit = "fatigue life", "cycles"
-
-    def __init__(self, rho: float = 100.0) -> None:
-        self.rho = float(rho)
 
     def check(self, problem) -> None:
         if problem.fatigue is None:
             raise ValueError("FatigueLife needs OptimizationProblem(fatigue=FatigueModel(...))")
 
+    def values(self, problem, ev) -> np.ndarray:
+        return -np.log10(problem.lives(ev))
+
     def value(self, problem, ev) -> float:
-        return ks_max(-np.log10(problem.lives(ev)), self.rho)
+        return float(np.max(self.values(problem, ev)))
 
     def describe(self, problem, ev) -> str:
         lives = problem.lives(ev)

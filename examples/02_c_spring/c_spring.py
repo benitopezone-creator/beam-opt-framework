@@ -58,8 +58,8 @@ MATERIAL = Material(E=2.0e5, nu=0.3, rho=7.85e-9, sigma_y=390.0, name="steel")
 THICKNESS, CONSTANT = "b", {"h": WIDTH}
 
 
-def build_model(n_elem: int = 60) -> StructuralModel:
-    """Upper half of the clip, from the back (symmetry plane y = 0) to the tip."""
+def build_model(n_elem: int = 60, opening: float = OPENING) -> StructuralModel:
+    """Upper half of the clip, from the back (symmetry plane y = 0) to the tip; *opening* [mm]."""
     theta = np.radians(np.linspace(180.0, TIP_ANGLE, 41))
     points = np.column_stack([RADIUS * np.cos(theta), RADIUS * np.sin(theta), np.zeros_like(theta)])
     mesh = discretize(BeamPath(points), n_elem)
@@ -70,7 +70,7 @@ def build_model(n_elem: int = 60) -> StructuralModel:
             Symmetry("start", normal="Y"),
             ImposedDisplacement("start", "UX"),  # no rigid translation along x
             ImposedDisplacement(["start", "end"], "UZ"),  # the clip stays in its plane
-            ImposedDisplacement("end", "UY", OPENING / 2.0),  # half of the opening
+            ImposedDisplacement("end", "UY", opening / 2.0),  # half of the opening
         ],
     )
 

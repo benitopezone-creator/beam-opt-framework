@@ -370,6 +370,22 @@ class OptimizationProblem:
             return self._failed_objective()
         return self.objective_fn.value(self, ev)
 
+    def objective_vector(self, x: np.ndarray) -> np.ndarray:
+        """
+        Per-element values of a min-max objective at *x* (see ``Objective.values``).
+
+        For a failed FEM evaluation, every value is the failure value.
+        """
+        ev = self.evaluate(x)
+        if ev.failed:
+            return np.full(self.model.beam.mesh.n_elem, self._failed_objective())
+        return np.asarray(self.objective_fn.values(self, ev), dtype=float)
+
+    @property
+    def is_minmax(self) -> bool:
+        """Whether the objective is the worst of per-element values."""
+        return type(self.objective_fn).values is not Objective.values
+
     def _failed_objective(self) -> float:
         if self._failure_value is None:
             self._failure_value = 1e30  # guards the evaluation below

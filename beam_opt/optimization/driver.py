@@ -53,35 +53,58 @@ class _BudgetReached(Exception):
 
 
 class _Scaled:
-    """The problem seen by the algorithms: z in [0, 1], objective relative to its magnitude."""
+    """
+    The problem seen by the algorithms.
 
-    def __init__(self, problem: OptimizationProblem, max_evals: int) -> None:
+    Variables ``w = [z, (τ)]``: the design scaled to [0, 1] and, for a
+    min-max objective solved in bound form, the bound τ.  The objective is
+    divided by its magnitude.
+    """
+
+    def __init__(self, problem: OptimizationProblem, max_evals: int, bound_form: bool) -> None:
         self.problem = problem
         self.last_solve = len(problem.history) + int(max_evals)
         self.lo = problem.lower
         self.span = problem.upper - problem.lower
         self.f_ref = problem.objective_scale()
         self.n = problem.n_vars
-        self.bounds = Bounds(np.zeros(self.n), np.ones(self.n))
+        self.bound_form = bool(bound_form)
+        lower, upper = np.zeros(self.n), np.ones(self.n)
+        if self.bound_form:
+            lower, upper = np.append(lower, -np.inf), np.append(upper, np.inf)
+        self.bounds = Bounds(lower, upper)
 
-    def x(self, z: np.ndarray) -> np.ndarray:
-        return self.lo + np.clip(np.asarray(z, dtype=float), 0.0, 1.0) * self.span
+    def x(self, w: np.ndarray) -> np.ndarray:
+        z = np.asarray(w, dtype=float)[: self.n]
+        return self.lo + np.clip(z, 0.0, 1.0) * self.span
 
     def z(self, x: np.ndarray) -> np.ndarray:
         return (np.asarray(x, dtype=float) - self.lo) / self.span
+
+    def start(self, z0: np.ndarray) -> np.ndarray:
+        """Starting point of the algorithm: z0, plus τ0 = the worst value at z0."""
+        if not self.bound_form:
+            return z0
+        tau0 = np.max(self.problem.objective_vector(self.x(z0))) / self.f_ref
+        return np.append(z0, tau0)
 
     def _check_budget(self) -> None:
         if len(self.problem.history) >= self.last_solve:
             raise _BudgetReached
 
-    def objective(self, z: np.ndarray) -> float:
+    def objective(self, w: np.ndarray) -> float:
+        if self.bound_form:
+            return float(w[-1])
         if self.problem.objective_fn.needs_fem:
             self._check_budget()
-        return self.problem.objective(self.x(z)) / self.f_ref
+        return self.problem.objective(self.x(w)) / self.f_ref
 
-    def constraints(self, z: np.ndarray) -> np.ndarray:
+    def constraints(self, w: np.ndarray) -> np.ndarray:
         self._check_budget()
-        return self.problem.constraint_vector(self.x(z))
+        g = self.problem.constraint_vector(self.x(w))
+        if self.bound_form:  # value_e / f_ref ≤ τ
+            g = np.concatenate([g, w[-1] - self.problem.objective_vector(self.x(w)) / self.f_ref])
+        return g
 
 
 def _inside(z0: np.ndarray, step: float) -> np.ndarray:
@@ -101,7 +124,7 @@ def _cobyla(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
     opts = {"maxiter": max_evals, "rhobeg": 0.1, "disp": False} | options
     return minimize(
         sp.objective,
-        _inside(z0, opts["rhobeg"]),
+        sp.start(_inside(z0, opts["rhobeg"])),
         method="COBYLA",
         bounds=sp.bounds,
         constraints=[{"type": "ineq", "fun": sp.constraints}],
@@ -115,7 +138,7 @@ def _slsqp(sp: _Scaled, z0, max_evals, tol, seed, options) -> OptimizeResult:
     opts = {"maxiter": max(1, max_evals // (sp.n + 1)), "eps": 1e-4, "disp": False} | options
     return minimize(
         sp.objective,
-        z0,
+        sp.start(z0),
         method="SLSQP",
         bounds=sp.bounds,
         constraints=[{"type": "ineq", "fun": sp.constraints}],
@@ -158,6 +181,9 @@ def _differential_evolution(sp: _Scaled, z0, max_evals, tol, seed, options) -> O
         **options,
     )
 
+
+#: Methods that solve a min-max objective in bound form (they handle constraints).
+_BOUND_FORM = ("cobyla", "slsqp")
 
 #: Method name -> runner.  Register a new algorithm by adding an entry with
 #: the signature ``(scaled_problem, z0, max_evals, tol, seed, options)``.
@@ -237,7 +263,7 @@ def optimize(
         raise ValueError(f"x0 has {x0.size} entries, expected {problem.n_vars}")
 
     start = len(problem.history)
-    sp = _Scaled(problem, max_evals)
+    sp = _Scaled(problem, max_evals, bound_form=problem.is_minmax and method in _BOUND_FORM)
     logger.info("Starting %s  n_vars=%d  max_evals=%d", method, problem.n_vars, max_evals)
     z0 = np.clip(sp.z(x0), 0.0, 1.0)
     try:
