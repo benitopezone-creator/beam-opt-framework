@@ -21,7 +21,6 @@ from .components import (
     StructuralModel,
     quad_area_3d,
 )
-from .loadcase import LoadCase
 
 __all__ = [
     "BoundaryCondition",
@@ -30,7 +29,6 @@ __all__ = [
     "FixedElement",
     "FixedShell",
     "ImposedDisplacement",
-    "LoadCase",
     "ModelBuilder",
     "NodalForce",
     "OptimizableBeam",

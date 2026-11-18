@@ -1,7 +1,7 @@
 """
-Example 06 — low-cycle fatigue of a snap clip: grip force against life.
+Extra example — low-cycle fatigue of a snap clip: grip force against life.
 
-The C-shaped clip of example 02 is opened and released at every use
+The C-shaped clip of example 02 (examples/02_c_spring) is opened and released at every use
 (zero-to-peak imposed displacement, R = 0) and must still grip the part it
 holds.  The opening is large, so the clip yields locally: the design
 criterion is no longer "stress below yield" but **the number of openings
@@ -19,7 +19,7 @@ into a load spectrum, and Miner's rule gives the life in **days**.
 
 Run it (built-in solver, no ANSYS needed)::
 
-    python examples/06_lcf_clip/lcf_clip.py --save-plots results/lcf_clip
+    python examples/extras/lcf_clip/lcf_clip.py --save-plots results/lcf_clip
 
 Units: mm, N, ton, s, MPa.  The strain-life constants are typical of a
 medium-carbon steel and are illustrative only.
@@ -33,20 +33,18 @@ from pathlib import Path
 
 import numpy as np
 
-from beam_opt import (
+from beam_opt import NativeSolver, OptimizationProblem, optimize
+from beam_opt.extras import (
     FatigueLife,
     FatigueModel,
     LoadSpectrum,
-    NativeSolver,
-    OptimizationProblem,
     StrainLifeCurve,
     epsilon_constraint,
-    optimize,
 )
 
 # The geometry, supports and material of example 02
 _spec = importlib.util.spec_from_file_location(
-    "c_spring", Path(__file__).parents[1] / "02_c_spring" / "c_spring.py"
+    "c_spring", Path(__file__).parents[2] / "02_c_spring" / "c_spring.py"
 )
 clip = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(clip)

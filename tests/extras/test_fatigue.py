@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from beam_opt.fatigue import FatigueModel, StrainLifeCurve
+from beam_opt.extras import FatigueModel, StrainLifeCurve
 
 E = 2.0e5  # [MPa]
 # Steel with typical strain-life constants (values of the order of an SAE 1045)

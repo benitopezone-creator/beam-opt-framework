@@ -9,8 +9,8 @@ import pytest
 from test_fatigue import ELASTIC, STEEL
 from test_objectives import make
 
-from beam_opt.fatigue import FatigueModel, LoadBlock, LoadSpectrum, rainflow
-from beam_opt.optimization import FatigueLife, Mass, optimize
+from beam_opt.extras import FatigueLife, FatigueModel, LoadBlock, LoadSpectrum, rainflow
+from beam_opt.optimization import Mass, optimize
 
 # ── Rainflow counting ────────────────────────────────────────────────────
 

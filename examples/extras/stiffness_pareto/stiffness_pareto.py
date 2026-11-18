@@ -1,7 +1,7 @@
 """
-Example 05 — stiffness against mass for the helical tube beam.
+Extra example — stiffness against mass for the helical tube beam.
 
-The helix of example 03 is now designed for **stiffness**: minimum
+The helix of example 03 (examples/03_helix) is now designed for **stiffness**: minimum
 compliance (the work of the loads, C = Σ F·u) under a mass budget, with the
 von Mises stress constraint kept.  Sweeping the budget traces the Pareto
 front between mass and stiffness (epsilon-constraint method); every point
@@ -9,7 +9,7 @@ is compared with the tube of constant radius of the same mass.
 
 Run it (built-in solver, no ANSYS needed)::
 
-    python examples/05_stiffness_pareto/stiffness_pareto.py --save-plots results/stiffness
+    python examples/extras/stiffness_pareto/stiffness_pareto.py --save-plots results/stiffness
 
 Units: mm, N, ton, s, MPa.
 """
@@ -22,17 +22,11 @@ from pathlib import Path
 
 import numpy as np
 
-from beam_opt import (
-    Compliance,
-    Mass,
-    NativeSolver,
-    OptimizationProblem,
-    epsilon_constraint,
-    optimize,
-)
+from beam_opt import Mass, NativeSolver, OptimizationProblem, optimize
+from beam_opt.extras import Compliance, epsilon_constraint
 
 _spec = importlib.util.spec_from_file_location(
-    "helix", Path(__file__).parents[1] / "03_helix" / "helix.py"
+    "helix", Path(__file__).parents[2] / "03_helix" / "helix.py"
 )
 helix = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(helix)

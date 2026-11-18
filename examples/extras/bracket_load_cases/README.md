@@ -1,4 +1,4 @@
-# Esempio 07 — Staffa curva con due casi di carico indipendenti
+# Extra — Staffa curva con due casi di carico indipendenti
 
 Una staffa a quarto di cerchio, incastrata a un estremo, porta all'altro estremo due
 carichi che **non agiscono insieme**:
@@ -10,7 +10,7 @@ La sezione rettangolare è libera in entrambe le dimensioni: la larghezza `b`, n
 resiste al carico di servizio; l'altezza `h`, fuori piano, resiste agli urti. Si cerca la
 massima vita a fatica a massa data (60 g), con il danno di Miner sommato sui due casi.
 
-![Sezione ottima e vita al variare del mix di carico](../../docs/img/bracket_load_mix.png)
+![Sezione ottima e vita al variare del mix di carico](../../../docs/img/extras/bracket_load_mix.png)
 
 ## Problema
 
@@ -19,7 +19,7 @@ massima vita a fatica a massa data (60 g), con il danno di Miner sommato sui due
 | Raggio della linea d'asse | 150 mm |
 | Carico di servizio (nel piano) | 300 N, 1000 cicli al giorno, R = 0 |
 | Urti (fuori piano) | 40 N, da 0 a 1000 al giorno, R = −1 |
-| Materiale | acciaio; curva deformazione-vita come nell'esempio 06 (indicativa) |
+| Materiale | acciaio; curva deformazione-vita come nell'esempio extra della clip (indicativa) |
 | Variabili | `b(s)` e `h(s)`, tra 2 e 20 mm, 6 punti di controllo ciascuna |
 | Obiettivo | massima vita a fatica in giorni, massa 60 g |
 
@@ -42,14 +42,14 @@ Vita in giorni del progetto ottimizzato per un mix (righe) usato con un mix (col
   che non ne tiene conto dura rispettivamente 11, 30 e 90 volte meno di quello che li
   considera, pur avendo la stessa massa.
 
-È la differenza con l'esempio 06: lì un unico schema di carico scalato rende la forma
+È la differenza con l'esempio extra della clip ([lcf_clip](../lcf_clip)): lì un unico schema di carico scalato rende la forma
 ottima indipendente dallo spettro; qui i due casi sollecitano la sezione in modi diversi,
 e conta quanto spesso si presenta ciascuno.
 
 ## Esecuzione
 
 ```bash
-python examples/07_bracket_load_cases/bracket.py --save-plots results/bracket
+python examples/extras/bracket_load_cases/bracket.py --save-plots results/bracket
 ```
 
 Circa 30 secondi con il solutore interno (16 ottimizzazioni e valutazioni incrociate).

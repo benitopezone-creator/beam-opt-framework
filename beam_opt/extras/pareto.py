@@ -1,6 +1,6 @@
 """
-beam_opt.optimization.pareto
-============================
+beam_opt.extras.pareto
+======================
 Trade-off curves between two goals by the epsilon-constraint method.
 
 One goal is the objective of the problem, the other is turned into a
@@ -22,8 +22,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import OptimizeResult
 
-from .driver import optimize
-from .problem import OptimizationProblem
+from ..optimization.driver import optimize
+from ..optimization.problem import OptimizationProblem
 
 
 @dataclass

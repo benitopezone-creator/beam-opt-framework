@@ -17,24 +17,21 @@ import numpy as np
 import pytest
 from test_fatigue import STEEL
 
-from beam_opt.fatigue import FatigueModel
-from beam_opt.geometry import BeamPath, discretize
-from beam_opt.materials import Material
-from beam_opt.model import Clamp, NodalForce, OptimizableBeam, StructuralModel
-from beam_opt.native import NativeSolver
-from beam_opt.optimization import (
+from beam_opt.extras import (
     Compliance,
     Displacement,
     FatigueLife,
-    Mass,
-    OptimizationProblem,
+    FatigueModel,
     PeakStress,
     WeightedSum,
     epsilon_constraint,
     ks_max,
-    optimize,
-    read_history,
 )
+from beam_opt.geometry import BeamPath, discretize
+from beam_opt.materials import Material
+from beam_opt.model import Clamp, NodalForce, OptimizableBeam, StructuralModel
+from beam_opt.native import NativeSolver
+from beam_opt.optimization import Mass, OptimizationProblem, optimize, read_history
 from beam_opt.report import print_report
 from beam_opt.sections import RectSection
 

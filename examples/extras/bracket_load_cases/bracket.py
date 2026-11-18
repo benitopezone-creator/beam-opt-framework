@@ -1,5 +1,5 @@
 """
-Example 07 — curved bracket with two independent load cases.
+Extra example — curved bracket with two independent load cases.
 
 A quarter-circle bracket, clamped at one end, carries at the other end
 
@@ -17,9 +17,9 @@ case, or the one tuned for another mix, loses life.
 
 Run it (built-in solver, no ANSYS needed)::
 
-    python examples/07_bracket_load_cases/bracket.py --save-plots results/bracket
+    python examples/extras/bracket_load_cases/bracket.py --save-plots results/bracket
 
-Units: mm, N, ton, s, MPa.  Strain-life constants as in example 06
+Units: mm, N, ton, s, MPa.  Strain-life constants as in the clip extra example
 (illustrative).
 """
 
@@ -32,18 +32,15 @@ import numpy as np
 from beam_opt import (
     BeamPath,
     Clamp,
-    FatigueLife,
-    FatigueModel,
-    LoadCase,
     Material,
     NativeSolver,
     NodalForce,
     OptimizableBeam,
     OptimizationProblem,
-    StrainLifeCurve,
     StructuralModel,
     optimize,
 )
+from beam_opt.extras import FatigueLife, FatigueModel, LoadCase, StrainLifeCurve
 from beam_opt.geometry import discretize
 
 RADIUS = 150.0  # radius of the centre line [mm]
@@ -70,7 +67,7 @@ def build_model(n_elem: int = 50) -> StructuralModel:
 
 def load_cases(knocks_per_day: float) -> list[LoadCase]:
     """Service (zero to peak) and knocks (fully reversed, as 0.5-cycle pairs)."""
-    from beam_opt import LoadBlock, LoadSpectrum
+    from beam_opt.extras import LoadBlock, LoadSpectrum
 
     service = LoadSpectrum((LoadBlock(1.0, 0.0, SERVICE_CYCLES),), name="day")
     knocks = LoadSpectrum((LoadBlock(1.0, -1.0, knocks_per_day),), name="day")

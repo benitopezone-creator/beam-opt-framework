@@ -1,36 +1,41 @@
 # Changelog
 
-## [Unreleased] – Objectives other than mass (local, not published)
+## [Unreleased]
 
-### Added
-- `OptimizationProblem(objective=...)` with `optimization.objectives`: `Mass` (default),
-  `Compliance` (stiffness), `Displacement`, `PeakStress`, `FatigueLife`, `WeightedSum`.
-- Min-max objectives (`PeakStress`, `FatigueLife`) are solved in bound form by SLSQP and
-  COBYLA (min τ subject to value_e ≤ τ): robust convergence from any starting point.
-- `beam_opt.fatigue`: `StrainLifeCurve` and `FatigueModel`, low-cycle fatigue by the local
-  strain approach (Neuber, Masing, Manson-Coffin-Basquin, SWT or Morrow mean stress).
-- Constraints `mass_max` (mass budget) and `life_min` (fatigue life of every element).
-- Variable-amplitude fatigue: `LoadBlock`, `LoadSpectrum` (Miner's rule, lives in
-  repetitions of the spectrum), rainflow counting `rainflow` / `LoadSpectrum.from_history`
-  (ASTM E1049); cycles below the fatigue limit add no damage. Example 06 computes the
-  service life of the clip in days from a daily usage history.
-- Independent load cases: `LoadCase(name, loads, weight, spectrum, cycles)` and
-  `OptimizationProblem(load_cases=...)`. Every design is analysed once per case; every
-  constraint holds in every case; compliance is the weighted sum, peak stress and
-  displacement the worst over the cases, fatigue damage is summed over the cases.
-  `Evaluation.cases` holds the results of every case. Example 07: curved bracket whose
-  optimal section changes with the mix of in-plane and out-of-plane loads.
-- `optimization.epsilon_constraint`: Pareto fronts between two goals.
-- `examples/05_stiffness_pareto` (stiffness against mass of the helix) and
-  `examples/06_lcf_clip` (grip force against low-cycle fatigue life of the clip).
-- `docs/teoria.md`: sections on objectives, Pareto fronts and low-cycle fatigue.
+### Added — core
+- Replaceable objective: `OptimizationProblem(objective=...)` with the interface
+  `optimization.Objective`; `Mass` remains the default and the behaviour without it is
+  unchanged.
+- Constraints `mass_max` (mass budget) and, with a fatigue model, `life_min`.
+- Min-max objectives (the worst of several values) are solved by SLSQP and COBYLA in bound
+  form (min τ subject to value_i ≤ τ): robust convergence from any starting point.
+- Load cases: `OptimizationProblem(load_cases=...)`; every design is analysed once per
+  case and every constraint holds in every case; `Evaluation.cases` holds the results.
+
+### Added — extras (`beam_opt.extras`, separate from the core)
+- Objectives: `Compliance` (stiffness; weighted sum over load cases), `Displacement`,
+  `PeakStress`, `FatigueLife`, `WeightedSum`.
+- Low-cycle fatigue by the local strain approach: `StrainLifeCurve`, `FatigueModel`
+  (Neuber, Masing, Manson-Coffin-Basquin, SWT or Morrow mean-stress correction).
+- Variable amplitude: `LoadBlock`, `LoadSpectrum` (Miner's rule, lives in repetitions of
+  the spectrum), rainflow counting `rainflow` / `LoadSpectrum.from_history` (ASTM E1049);
+  cycles below the fatigue limit add no damage.
+- `LoadCase(name, loads, weight, spectrum, cycles)`; fatigue damage is summed over the
+  cases.
+- `epsilon_constraint`: Pareto fronts between two goals.
+- `examples/extras`: `stiffness_pareto` (stiffness against mass of the helix), `lcf_clip`
+  (grip force against low-cycle fatigue life of the clip, service life from a daily
+  history), `bracket_load_cases` (curved bracket whose optimal section depends on the mix
+  of two load cases).
+- `docs/extras.md`; tests in `tests/extras`.
 
 ### Changed
 - `safety_factor=None` removes the stress constraint; `f_react_max` and `reaction_nodes`
   are optional.
-- `optimize` returns the best feasible design by objective value, not by mass; the
-  history CSV has an `objective` column, used by `best_design`.
+- `optimize` returns the best feasible design by objective value; the history CSV has an
+  `objective` column, used by `best_design`.
 - A failed FEM evaluation is always infeasible.
+- The built-in solver keeps the prepared data of several models (one per load case).
 - `examples/02_c_spring/c_spring.build_model` takes the opening as an argument.
 
 ## [0.2.0] – 2026-11

@@ -1,6 +1,6 @@
 """
-beam_opt.fatigue
-================
+beam_opt.extras.fatigue
+=======================
 Low-cycle fatigue life by the local strain approach.
 
 The structural analysis is linear: it gives the *elastic* stress at the

@@ -1,17 +1,17 @@
-# Esempio 06 — Fatica oligociclica di una clip a scatto: presa contro vita
+# Extra — Fatica oligociclica di una clip a scatto: presa contro vita
 
-La clip a C dell'esempio 02 viene aperta e rilasciata a ogni utilizzo e deve continuare a
+La clip a C dell'esempio 02 ([examples/02_c_spring](../../02_c_spring)) viene aperta e rilasciata a ogni utilizzo e deve continuare a
 stringere il pezzo che trattiene. L'apertura è grande, quindi la clip **snerva
 localmente**: il criterio di progetto non è più "tensione sotto lo snervamento", ma **il
 numero di aperture prima che nasca una cricca**.
 
-![Presa contro vita](../../docs/img/lcf_clip_trade_off.png)
+![Presa contro vita](../../../docs/img/extras/lcf_clip_trade_off.png)
 
 ## Problema
 
 | Grandezza | Valore |
 |---|---|
-| Geometria e materiale | quelli dell'esempio 02 (raggio 40 mm, larghezza 10 mm) |
+| Geometria e materiale | quelli dell'esempio 02 ([examples/02_c_spring](../../02_c_spring)) (raggio 40 mm, larghezza 10 mm) |
 | Apertura a ogni utilizzo | 36 mm, ciclo da zero al massimo (R = 0) |
 | Curva deformazione-vita | acciaio al carbonio medio: σ'_f = 930 MPa, b = −0,095, ε'_f = 0,26, c = −0,47, K' = 1258 MPa, n' = 0,208 (valori indicativi) |
 | Correzione della tensione media | Smith-Watson-Topper |
@@ -73,7 +73,7 @@ ampi.
 ## Esecuzione
 
 ```bash
-python examples/06_lcf_clip/lcf_clip.py --save-plots results/lcf_clip
+python examples/extras/lcf_clip/lcf_clip.py --save-plots results/lcf_clip
 ```
 
 Circa 40 secondi con il solutore interno.
@@ -85,4 +85,4 @@ Circa 40 secondi con il solutore interno.
 - Il modello è lineare: la plasticità entra solo nel punto critico, tramite la regola di
   Neuber, e non redistribuisce le sollecitazioni nella clip. È l'ipotesi standard
   dell'approccio locale in deformazione, valida finché lo snervamento resta localizzato.
-- La teoria è in [docs/teoria.md](../../docs/teoria.md), sezioni 6 e 7.
+- La teoria è in [docs/extras.md](../../../docs/extras.md).

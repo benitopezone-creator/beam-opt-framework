@@ -6,19 +6,12 @@ import numpy as np
 import pytest
 from test_fatigue import STEEL
 
-from beam_opt.fatigue import FatigueModel
+from beam_opt.extras import Compliance, FatigueLife, FatigueModel, LoadCase
 from beam_opt.geometry import BeamPath, discretize
 from beam_opt.materials import Material
-from beam_opt.model import (
-    Clamp,
-    ImposedDisplacement,
-    LoadCase,
-    NodalForce,
-    OptimizableBeam,
-    StructuralModel,
-)
+from beam_opt.model import Clamp, ImposedDisplacement, NodalForce, OptimizableBeam, StructuralModel
 from beam_opt.native import NativeSolver
-from beam_opt.optimization import Compliance, FatigueLife, Mass, OptimizationProblem, optimize
+from beam_opt.optimization import Mass, OptimizationProblem, optimize
 
 L = 200.0  # [mm]
 MAT = Material(E=2.0e5, nu=0.3, rho=7.85e-9, sigma_y=355.0)

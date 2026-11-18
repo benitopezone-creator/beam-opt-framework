@@ -1,6 +1,6 @@
 """
-beam_opt.model.loadcase
-=======================
+beam_opt.extras.loadcase
+========================
 Independent load cases.
 
 A ``LoadCase`` lists the loads of one situation (nodal forces and imposed
@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .bcs import BoundaryCondition, ImposedDisplacement, NodalForce
-from .components import StructuralModel
+from ..model.bcs import BoundaryCondition, ImposedDisplacement, NodalForce
+from ..model.components import StructuralModel
 
 
 @dataclass

@@ -1,9 +1,11 @@
 """
 beam_opt – Dimensional optimisation framework for complex beam structures.
+
+Extensions beyond the core (other objectives, fatigue, load cases, trade-off
+curves) are in ``beam_opt.extras``.
 """
 
 from .exceptions import SolutionNotConvergedError
-from .fatigue import FatigueModel, LoadBlock, LoadSpectrum, StrainLifeCurve, rainflow
 from .geometry import BeamMesh, BeamPath
 from .materials import Material
 from .model import (
@@ -11,7 +13,6 @@ from .model import (
     FixedBeam,
     FixedShell,
     ImposedDisplacement,
-    LoadCase,
     ModelBuilder,
     NodalForce,
     OptimizableBeam,
@@ -20,18 +21,7 @@ from .model import (
     Symmetry,
 )
 from .native import NativeSolver
-from .optimization import (
-    CobylaDriver,
-    Compliance,
-    Displacement,
-    FatigueLife,
-    Mass,
-    OptimizationProblem,
-    PeakStress,
-    WeightedSum,
-    epsilon_constraint,
-    optimize,
-)
+from .optimization import CobylaDriver, Mass, OptimizationProblem, optimize
 from .post import RectBeamStressEvaluator, SectionStressEvaluator, StressEvaluator
 from .section_law import SectionLaw
 from .sections import (
@@ -55,18 +45,11 @@ __all__ = [
     "CircSection",
     "Clamp",
     "CobylaDriver",
-    "Compliance",
-    "Displacement",
     "EllipseSection",
-    "FatigueLife",
-    "FatigueModel",
     "FixedBeam",
     "FixedShell",
     "ISection",
     "ImposedDisplacement",
-    "LoadBlock",
-    "LoadCase",
-    "LoadSpectrum",
     "MapdlSession",
     "Mass",
     "Material",
@@ -75,7 +58,6 @@ __all__ = [
     "NodalForce",
     "OptimizableBeam",
     "OptimizationProblem",
-    "PeakStress",
     "RectBeamStressEvaluator",
     "RectSection",
     "RigidRegion",
@@ -85,15 +67,11 @@ __all__ = [
     "SectionStressEvaluator",
     "SolutionNotConvergedError",
     "SolverSettings",
-    "StrainLifeCurve",
     "StressEvaluator",
     "StructuralModel",
     "Symmetry",
     "TubeSection",
-    "WeightedSum",
-    "epsilon_constraint",
     "optimize",
     "polygon_shape",
-    "rainflow",
     "solve",
 ]

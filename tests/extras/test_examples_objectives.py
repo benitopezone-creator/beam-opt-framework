@@ -1,4 +1,4 @@
-"""Examples 05 (stiffness of the helix) and 06 (low-cycle fatigue of the clip)."""
+"""Extra examples: stiffness of the helix, fatigue of the clip, bracket with load cases."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from beam_opt import optimize
 
-EXAMPLES = Path(__file__).parents[1] / "examples"
+EXAMPLES = Path(__file__).parents[2] / "examples" / "extras"
 
 
 def _load(folder: str, name: str):
@@ -21,9 +21,9 @@ def _load(folder: str, name: str):
     return module
 
 
-stiff = _load("05_stiffness_pareto", "stiffness_pareto")
-lcf = _load("06_lcf_clip", "lcf_clip")
-bracket = _load("07_bracket_load_cases", "bracket")
+stiff = _load("stiffness_pareto", "stiffness_pareto")
+lcf = _load("lcf_clip", "lcf_clip")
+bracket = _load("bracket_load_cases", "bracket")
 
 
 @pytest.fixture(scope="module")

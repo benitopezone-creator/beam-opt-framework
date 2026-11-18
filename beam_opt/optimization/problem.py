@@ -22,18 +22,22 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..exceptions import SolutionNotConvergedError
-from ..fatigue import FatigueModel
-from ..model import LoadCase, ModelBuilder, StructuralModel
+from ..model import ModelBuilder, StructuralModel
 from ..native import NativeSolver
 from ..post import SectionStressEvaluator, StressEvaluator, last_results, reaction_resultant
 from ..section_law import OVERSHOOT_FREE, SectionLaw
 from ..solver import SolverSettings, solve
 from .history import HistoryWriter
 from .objectives import Mass, Objective
+
+if TYPE_CHECKING:  # extras, used through generic hooks only
+    from ..extras.fatigue import FatigueModel
+    from ..extras.loadcase import LoadCase
 
 logger = logging.getLogger(__name__)
 

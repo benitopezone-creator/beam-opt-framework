@@ -195,6 +195,24 @@ reader interprets parameters, expressions, `*DO` loops, nodes, elements, section
 selections, constraints and loads, and reports the line of anything it does not support.
 See [docs/apdl.md](docs/apdl.md) (Italian) for the list of commands and the limits.
 
+## Extras
+
+Beyond the core, `beam_opt.extras` collects tools developed on top of the framework and
+kept separate from it: objectives other than the mass (stiffness, peak stress, fatigue
+life), low-cycle fatigue with load spectra (Miner's rule, rainflow counting), independent
+load cases and Pareto fronts. They plug in through generic parameters of
+`OptimizationProblem` and are not needed for minimum-mass design.
+
+```python
+from beam_opt.extras import Compliance
+
+problem = OptimizationProblem(NativeSolver(), model, ..., objective=Compliance(), mass_max=150.0)
+```
+
+Examples in [examples/extras](examples/extras), theory in [docs/extras.md](docs/extras.md)
+(Italian). The extras are tested (`tests/extras`) but newer and less established than the
+core.
+
 ## Verification
 
 The suite (`pytest -m "not mapdl"`, 330+ tests) checks the framework against closed-form
@@ -210,6 +228,7 @@ installation.
 
 - [docs/teoria.md](docs/teoria.md) — formulation, solver, stress recovery, assumptions (Italian)
 - [docs/apdl.md](docs/apdl.md) — APDL import/export and custom sections (Italian)
+- [docs/extras.md](docs/extras.md) — extras: other objectives, fatigue, load cases (Italian)
 - [docs/anchors-e-discretizzazione.md](docs/anchors-e-discretizzazione.md) — anchors, curved paths, mesh studies (Italian)
 - [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md)
 
@@ -227,9 +246,10 @@ beam_opt/
 ├── post/            result extraction, stress evaluation
 ├── optimization/    problem, selectable algorithms, history
 ├── apdl.py          APDL import and export
-└── report/          text report and plots
-examples/            four ready-to-run cases
-tests/               pytest suite
+├── report/          text report and plots
+└── extras/          beyond the core: other objectives, fatigue, load cases, Pareto fronts
+examples/            four ready-to-run cases; extras/ for the extras
+tests/               pytest suite; extras/ for the extras
 docs/                theory and guides
 ```
 

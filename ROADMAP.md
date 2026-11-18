@@ -229,6 +229,19 @@ attivo (`.github/workflows/ci.yml`).
 
 ---
 
+## Extras (fuori dal nucleo)
+
+*Stato:* in `beam_opt.extras`, separati dal nucleo: obiettivi diversi dalla massa
+(rigidezza, spostamento, tensione di picco, vita a fatica, somma pesata), fatica
+oligociclica con approccio locale in deformazione, spettri di carico con regola di Miner e
+conteggio rainflow, casi di carico indipendenti, fronti di Pareto. Esempi in
+`examples/extras`, teoria in `docs/extras.md`.
+
+Idee per il seguito: cicli tra casi di carico diversi (rainflow sulla sequenza dei
+casi), fatica multiassiale non proporzionale, gradienti analitici della vita.
+
+---
+
 ## Fase 8 — Sezioni e vincoli aggiuntivi
 
 *Stato:* fatti il profilo a I, l'ellisse, le sezioni personalizzate (`polygon_shape`,

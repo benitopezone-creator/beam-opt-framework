@@ -61,7 +61,7 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tests", "tests/data"]
+pythonpath = ["tests", "tests/data", "tests/extras"]
 markers = [
     "mapdl: integration test that requires a licensed ANSYS MAPDL installation",
     "slow: long optimisation run (tens of seconds); deselect with -m \"not slow\"",
