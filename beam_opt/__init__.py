@@ -3,7 +3,7 @@ beam_opt – Dimensional optimisation framework for complex beam structures.
 """
 
 from .exceptions import SolutionNotConvergedError
-from .fatigue import FatigueModel, StrainLifeCurve
+from .fatigue import FatigueModel, LoadBlock, LoadSpectrum, StrainLifeCurve, rainflow
 from .geometry import BeamMesh, BeamPath
 from .materials import Material
 from .model import (
@@ -63,6 +63,8 @@ __all__ = [
     "FixedShell",
     "ISection",
     "ImposedDisplacement",
+    "LoadBlock",
+    "LoadSpectrum",
     "MapdlSession",
     "Mass",
     "Material",
@@ -90,5 +92,6 @@ __all__ = [
     "epsilon_constraint",
     "optimize",
     "polygon_shape",
+    "rainflow",
     "solve",
 ]

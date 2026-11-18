@@ -73,3 +73,15 @@ def test_variable_thickness_multiplies_the_life(fatigue_front):
     lives = problem.lives(problem.evaluate(high["x"]))
     body = np.log10(lives[: int(0.7 * len(lives))])
     assert np.ptp(body) < 0.3  # the optimum spreads the damage along the clip
+
+
+def test_clip_service_life_under_a_daily_spectrum():
+    problem = lcf.make_problem(n_elem=40, n_ctrl=6)
+    result = lcf.service(problem, grip=60.0)
+    days = result["days"]
+    assert result["spectrum"].cycles == pytest.approx(lcf.USES_PER_DAY)
+    assert days["full openings"] > 3.0 * days["constant thickness"]
+    # one load pattern scaled: the design of uniform damage does not depend on the spectrum
+    np.testing.assert_allclose(result["x_tuned"], result["x_full"], rtol=1e-3)
+    assert days["daily spectrum"] == pytest.approx(days["full openings"], rel=1e-3)
+    assert sum(share for _, share in result["shares"]) == pytest.approx(1.0)

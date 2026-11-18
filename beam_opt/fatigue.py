@@ -19,16 +19,24 @@ with the mean stress accounted for by Smith-Watson-Topper
 
 or by Morrow, ``ε_a = (σ'_f − σ_m)/E (2N)^b + ε'_f (2N)^c``.
 
+Variable amplitude
+------------------
+A ``LoadSpectrum`` lists blocks of cycles between ``λ_min·P`` and
+``λ_max·P``; it can be obtained from a load history by rainflow counting
+(``LoadSpectrum.from_history``).  Damage is summed with Miner's rule,
+``D = Σ n_k / N_k``, and the life is the number of repetitions of the
+spectrum, ``1 / D``.
+
 Assumptions
 -----------
-* Proportional loading between ``R·P`` and ``P``: the stress at every point
-  scales with the load, so one linear analysis at the peak load ``P``
-  describes the whole cycle.  This holds for loads and for imposed
-  displacements alike.
+* Proportional loading: the stress at every point scales with the load, so
+  one linear analysis at the load ``P`` describes every cycle.  This holds
+  for loads and for imposed displacements alike, as long as one load
+  pattern is scaled (several independent load cases are not covered).
 * The equivalent stress is the von Mises stress taken as positive (tensile):
   conservative for points in compression when the mean stress matters.
-* One cycle type (constant amplitude).  Miner's rule for load spectra is a
-  natural extension.
+* Miner's rule is linear: load-sequence effects and the memory of the
+  hysteresis loops across blocks are neglected.
 
 No material is predefined: the strain-life constants come from the
 application (handbooks, tests).
@@ -36,6 +44,7 @@ application (handbooks, tests).
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 
 import numpy as np
@@ -146,29 +155,166 @@ class StrainLifeCurve:
 
 
 @dataclass(frozen=True)
+class LoadBlock:
+    """
+    ``cycles`` load cycles between ``min_factor·P`` and ``max_factor·P``.
+
+    ``P`` is the load of the structural analysis; the factors may be
+    negative (load reversal).
+
+    Parameters
+    ----------
+    max_factor, min_factor : float
+        Extreme load factors of the cycle [-], ``min_factor <= max_factor``.
+    cycles : float
+        Number of cycles per repetition of the spectrum [-] (may be 0.5:
+        a half cycle from rainflow counting).
+    """
+
+    max_factor: float
+    min_factor: float
+    cycles: float
+
+    def __post_init__(self) -> None:
+        if self.min_factor > self.max_factor:
+            raise ValueError("min_factor must not exceed max_factor")
+        if self.cycles < 0.0:
+            raise ValueError("cycles must be non-negative")
+
+    @property
+    def peak(self) -> float:
+        """Largest absolute load factor of the cycle [-]."""
+        return max(abs(self.max_factor), abs(self.min_factor))
+
+    @property
+    def range(self) -> float:
+        """Load-factor range of the cycle [-]."""
+        return self.max_factor - self.min_factor
+
+
+def rainflow(history: ArrayLike) -> list[tuple[float, float, float]]:
+    """
+    Rainflow cycle counting of a load history (ASTM E1049-85, section 5.4.4).
+
+    Parameters
+    ----------
+    history : array-like
+        Load (factor) values in time order [-].
+
+    Returns
+    -------
+    list[tuple[float, float, float]]
+        ``(max, min, count)`` of every counted range, with ``count`` 1.0 for a
+        full cycle and 0.5 for a half cycle.
+    """
+    values = np.asarray(history, dtype=float).ravel()
+    # keep only the reversals (peaks and valleys)
+    reversals: list[float] = []
+    for v in values:
+        if reversals and v == reversals[-1]:
+            continue
+        if len(reversals) >= 2 and (reversals[-1] - reversals[-2]) * (v - reversals[-1]) > 0.0:
+            reversals[-1] = v  # same direction: extend the excursion
+        else:
+            reversals.append(float(v))
+
+    counted: list[tuple[float, float, float]] = []
+    stack: list[float] = []
+    for point in reversals:
+        stack.append(point)
+        while len(stack) >= 3:
+            x = abs(stack[-1] - stack[-2])
+            y = abs(stack[-2] - stack[-3])
+            if x < y:
+                break
+            a, b = stack[-3], stack[-2]
+            if len(stack) == 3:  # Y contains the starting point: half cycle
+                counted.append((max(a, b), min(a, b), 0.5))
+                stack.pop(0)
+            else:
+                counted.append((max(a, b), min(a, b), 1.0))
+                del stack[-3:-1]
+    for a, b in itertools.pairwise(stack):
+        counted.append((max(a, b), min(a, b), 0.5))
+    return counted
+
+
+@dataclass(frozen=True)
+class LoadSpectrum:
+    """
+    Variable-amplitude loading: blocks of cycles, repeated.
+
+    Damage is accumulated with Miner's linear rule, ``D = Σ n_k / N_k`` per
+    repetition, so the life is a number of *repetitions* of the spectrum
+    (missions, days, kilometres...).  Load-sequence effects are neglected.
+
+    Parameters
+    ----------
+    blocks : tuple[LoadBlock, ...]
+        Cycles of one repetition.
+    name : str
+        What one repetition is (e.g. ``"day"``), for reports.
+    """
+
+    blocks: tuple[LoadBlock, ...]
+    name: str = "repetition"
+
+    def __post_init__(self) -> None:
+        if not self.blocks:
+            raise ValueError("a spectrum needs at least one block")
+
+    @classmethod
+    def from_history(cls, history: ArrayLike, name: str = "repetition", decimals: int = 6):
+        """
+        Spectrum of a load-factor history by rainflow counting.
+
+        Equal cycles (after rounding the factors to *decimals*) are merged
+        into one block.
+        """
+        merged: dict[tuple[float, float], float] = {}
+        for hi, lo, count in rainflow(history):
+            if hi == lo:
+                continue
+            key = (round(hi, decimals), round(lo, decimals))
+            merged[key] = merged.get(key, 0.0) + count
+        blocks = tuple(LoadBlock(hi, lo, n) for (hi, lo), n in sorted(merged.items()))
+        return cls(blocks, name)
+
+    @property
+    def cycles(self) -> float:
+        """Number of cycles per repetition [-]."""
+        return float(sum(b.cycles for b in self.blocks))
+
+
+@dataclass(frozen=True)
 class FatigueModel:
     """
-    Constant-amplitude fatigue of the optimisable beam.
+    Fatigue of the optimisable beam under constant or variable amplitude.
 
     Parameters
     ----------
     curve : StrainLifeCurve
         Material properties.
     load_ratio : float
-        ``R = P_min / P_max`` of the load cycle, ``−1 ≤ R < 1``.  The analysed
-        load is the peak ``P_max``: ``R = −1`` is fully reversed, ``R = 0``
-        is zero-to-peak (e.g. a clip opened and released).
+        Constant amplitude: ``R = P_min / P_max`` of the load cycle,
+        ``−1 ≤ R < 1``.  The analysed load is the peak ``P_max``: ``R = −1``
+        is fully reversed, ``R = 0`` is zero-to-peak (e.g. a clip opened and
+        released).  Ignored when a *spectrum* is given.
     kt : float
         Elastic stress concentration factor applied to the beam stress [-]
         (fillets, holes, welds not represented by the beam model).
     mean_stress : str
         ``"swt"`` (Smith-Watson-Topper, default), ``"morrow"`` or ``"none"``.
+    spectrum : LoadSpectrum | None
+        Variable-amplitude loading (Miner's rule).  Lives are then counted in
+        repetitions of the spectrum.
     """
 
     curve: StrainLifeCurve
     load_ratio: float = -1.0
     kt: float = 1.0
     mean_stress: str = "swt"
+    spectrum: LoadSpectrum | None = None
 
     def __post_init__(self) -> None:
         if not -1.0 <= self.load_ratio < 1.0:
@@ -178,9 +324,23 @@ class FatigueModel:
         if self.mean_stress not in ("swt", "morrow", "none"):
             raise ValueError("mean_stress must be 'swt', 'morrow' or 'none'")
 
-    def local_cycle(self, peak_stress: ArrayLike) -> dict[str, np.ndarray]:
+    @property
+    def unit(self) -> str:
+        """Unit of the lives: ``"cycles"`` or the repetitions of the spectrum."""
+        return "cycles" if self.spectrum is None else f"{self.spectrum.name}s"
+
+    def local_cycle(
+        self, peak_stress: ArrayLike, stress_range: ArrayLike | None = None
+    ) -> dict[str, np.ndarray]:
         """
-        Local elastic-plastic cycle at the peak elastic stress *peak_stress* [MPa].
+        Local elastic-plastic cycle from the elastic stresses [MPa].
+
+        Parameters
+        ----------
+        peak_stress : array-like
+            Largest elastic stress of the cycle [MPa].
+        stress_range : array-like | None
+            Elastic stress range [MPa]; defaults to ``(1 − R)·peak_stress``.
 
         Returns
         -------
@@ -190,8 +350,12 @@ class FatigueModel:
         """
         c = self.curve
         s_max = self.kt * np.abs(np.asarray(peak_stress, dtype=float))
+        if stress_range is None:
+            s_range = (1.0 - self.load_ratio) * s_max
+        else:
+            s_range = self.kt * np.abs(np.asarray(stress_range, dtype=float))
         sigma_max, _ = c.neuber(s_max)
-        dsig, deps = c.neuber_range((1.0 - self.load_ratio) * s_max)
+        dsig, deps = c.neuber_range(s_range)
         sigma_a = 0.5 * dsig
         return {
             "sigma_max": sigma_max,
@@ -200,16 +364,16 @@ class FatigueModel:
             "eps_a": 0.5 * deps,
         }
 
-    def life(self, peak_stress: ArrayLike) -> np.ndarray:
+    def cycle_life(self, peak_stress: ArrayLike, stress_range: ArrayLike | None = None):
         """
-        Cycles to crack initiation for the peak elastic stress *peak_stress* [MPa].
+        Cycles to crack initiation of one cycle type (see ``local_cycle``).
 
         Returns
         -------
         ndarray
             Cycles [-], capped at the run-out ``0.5·10^12``.
         """
-        cyc = self.local_cycle(peak_stress)
+        cyc = self.local_cycle(peak_stress, stress_range)
         c = self.curve
         lo = np.zeros_like(cyc["eps_a"])  # log10(2N)
         hi = np.full_like(lo, float(_LOG2N_MAX))
@@ -229,3 +393,42 @@ class FatigueModel:
         # capacity decreases with the life: excess(log 2N) increases
         log_rev = _bisect(excess, lo, hi)
         return 0.5 * 10.0**log_rev
+
+    def damage(self, stress: ArrayLike) -> np.ndarray:
+        """
+        Miner damage of one repetition (spectrum) or of one cycle (constant amplitude).
+
+        Parameters
+        ----------
+        stress : array-like
+            Elastic stress under the analysed load ``P`` [MPa].
+        """
+        s = np.abs(np.asarray(stress, dtype=float))
+        if self.spectrum is None:
+            return self._cycle_damage(self.cycle_life(s), 1.0)
+        total = np.zeros_like(s)
+        for block in self.spectrum.blocks:
+            if block.cycles == 0.0 or block.range == 0.0:
+                continue
+            n = self.cycle_life(block.peak * s, block.range * s)
+            total = total + self._cycle_damage(n, block.cycles)
+        return total
+
+    @staticmethod
+    def _cycle_damage(lives: np.ndarray, cycles: float) -> np.ndarray:
+        """``cycles / N``, zero for cycles at the run-out (below the fatigue limit)."""
+        runout = lives >= 0.5 * 10.0**_LOG2N_MAX * (1.0 - 1e-9)
+        return np.where(runout, 0.0, cycles / lives)
+
+    def life(self, stress: ArrayLike) -> np.ndarray:
+        """
+        Fatigue life for the elastic stress *stress* under the analysed load [MPa].
+
+        Constant amplitude: cycles to crack initiation (capped at the run-out
+        ``0.5·10^12``).  Spectrum: repetitions of the spectrum, ``1 / D``.
+        """
+        if self.spectrum is None:
+            return self.cycle_life(stress)
+        damage = self.damage(stress)
+        cap = 0.5 * 10.0**_LOG2N_MAX
+        return np.where(damage > 0.0, 1.0 / np.maximum(damage, 1.0 / cap), cap)

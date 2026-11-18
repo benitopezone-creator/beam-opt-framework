@@ -194,17 +194,37 @@ media si considera con Smith-Watson-Topper
 oppure con Morrow, `ε_a = (σ'_f − σ_m)/E (2N)^b + ε'_f (2N)^c`. La vita si ottiene per
 bisezione su `log10(2N)` tra 0 e 12; oltre `2N = 10¹²` si considera vita infinita.
 
+### Ampiezza variabile: rainflow e regola di Miner
+
+Uno spettro di carico (`LoadSpectrum`) è un elenco di blocchi: `n_k` cicli tra
+`λ_min,k·P` e `λ_max,k·P`, dove `P` è il carico dell'analisi. Per ogni blocco l'elemento
+vede `S_max = max(|λ_max|, |λ_min|)·S` e `ΔS = (λ_max − λ_min)·S`, da cui la vita `N_k`
+con le relazioni precedenti. Il danno di una ripetizione dello spettro (una missione, un
+giorno) si somma con la regola lineare di Miner
+
+```
+D = Σ_k n_k / N_k,        vita = 1 / D   ripetizioni
+```
+
+I cicli sotto il limite di fatica (vita oltre `0,5·10¹²` cicli) non danneggiano. Lo
+spettro si può ricavare da una storia di carico nel tempo con il conteggio **rainflow**
+(`rainflow`, `LoadSpectrum.from_history`), secondo la norma ASTM E1049-85, §5.4.4; i test
+ne riproducono l'esempio.
+
+Con un unico schema di carico scalato, il progetto a danno uniforme è ottimo per
+qualunque spettro: lo spettro cambia la vita, non la forma ottima (esempio 06).
+
 Ipotesi:
 
-- **Carico proporzionale** tra `R·P` e `P`: ogni punto scala con il carico, quindi una
-  sola analisi lineare al picco descrive l'intero ciclo. Vale sia per forze sia per
-  spostamenti imposti.
+- **Carico proporzionale**: ogni punto scala con il carico, quindi una sola analisi
+  lineare descrive ogni ciclo. Vale sia per forze sia per spostamenti imposti, purché si
+  scali un unico schema di carico (non più casi di carico indipendenti).
+- **Regola di Miner lineare**: si trascurano gli effetti di sequenza e la memoria dei
+  cicli di isteresi tra un blocco e l'altro.
 - **Tensione equivalente di von Mises presa positiva**: conservativo nei punti compressi
   quando conta la tensione media.
 - **Plasticità localizzata**: la regola di Neuber non redistribuisce le sollecitazioni
   nella struttura, ipotesi valida finché lo snervamento resta limitato a zone piccole.
-- Un solo tipo di ciclo (ampiezza costante). Lo spettro di carico con la regola di Miner
-  è un'estensione naturale.
 
 I test verificano la regola di Neuber, la coincidenza con Basquin in campo elastico per
 tutte e tre le correzioni, il giro completo sulla curva di Manson-Coffin in campo plastico

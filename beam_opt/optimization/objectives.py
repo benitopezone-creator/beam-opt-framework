@@ -199,7 +199,7 @@ class FatigueLife(Objective):
     def describe(self, problem, ev) -> str:
         lives = problem.lives(ev)
         k = int(np.argmin(lives))
-        return f"fatigue life: {lives[k]:.4g} cycles (element {k + 1})"
+        return f"fatigue life: {lives[k]:.4g} {problem.fatigue.unit} (element {k + 1})"
 
 
 class WeightedSum(Objective):

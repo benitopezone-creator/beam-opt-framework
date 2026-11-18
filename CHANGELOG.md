@@ -10,6 +10,10 @@
 - `beam_opt.fatigue`: `StrainLifeCurve` and `FatigueModel`, low-cycle fatigue by the local
   strain approach (Neuber, Masing, Manson-Coffin-Basquin, SWT or Morrow mean stress).
 - Constraints `mass_max` (mass budget) and `life_min` (fatigue life of every element).
+- Variable-amplitude fatigue: `LoadBlock`, `LoadSpectrum` (Miner's rule, lives in
+  repetitions of the spectrum), rainflow counting `rainflow` / `LoadSpectrum.from_history`
+  (ASTM E1049); cycles below the fatigue limit add no damage. Example 06 computes the
+  service life of the clip in days from a daily usage history.
 - `optimization.epsilon_constraint`: Pareto fronts between two goals.
 - `examples/05_stiffness_pareto` (stiffness against mass of the helix) and
   `examples/06_lcf_clip` (grip force against low-cycle fatigue life of the clip).

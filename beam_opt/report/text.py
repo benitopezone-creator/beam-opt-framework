@@ -81,13 +81,16 @@ def print_report(result, problem: OptimizationProblem) -> None:
     if problem.fatigue is not None:
         lives = problem.lives(ev)
         k = int(lives.argmin())
+        fat = problem.fatigue
+        if fat.spectrum is None:
+            load = f"R = {fat.load_ratio:g}"
+        else:
+            load = f"{fat.spectrum.cycles:g} cycles per {fat.spectrum.name}, Miner's rule"
         print("\n[FATIGUE LIFE]")
-        print(
-            f"  N_min    : {lives[k]:.4g} cycles  (element {k + 1}, R = {problem.fatigue.load_ratio:g})"
-        )
+        print(f"  N_min    : {lives[k]:.4g} {fat.unit}  (element {k + 1}, {load})")
         if problem.life_min is not None:
             ok = "✓ OK" if lives[k] >= problem.life_min * (1 - 1e-3) else "✗ VIOLATED"
-            print(f"  Required : {problem.life_min:.4g} cycles   {ok}")
+            print(f"  Required : {problem.life_min:.4g} {fat.unit}   {ok}")
 
     # ── Reaction ──
     f_react = float(ev.reaction)

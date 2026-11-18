@@ -44,13 +44,39 @@ così da distribuire lo stesso danno lungo tutta la clip. Per prese elevate si �
 campo oligociclico (vite di 10³-10⁴ cicli, deformazione plastica comparabile con quella
 elastica).
 
+## Vita in servizio: spettro di carico e regola di Miner
+
+Nell'uso reale le aperture non sono tutte uguali. L'esempio genera la storia di una
+giornata (40 utilizzi, aperture tra il 50 % e il 100 % di quella massima, un utilizzo su
+quattro senza rilascio completo), la riduce a uno spettro con il **conteggio rainflow**
+(ASTM E1049) e somma il danno con la **regola di Miner**. La vita risulta in giorni.
+
+Per la clip con presa di 60 N:
+
+| Progetto | Vita in servizio |
+|---|---|
+| Ottimizzato per aperture complete | 4675 giorni (12,8 anni) |
+| Ottimizzato per lo spettro giornaliero | 4675 giorni (12,8 anni) |
+| Spessore costante | 988 giorni (2,7 anni) |
+
+I due progetti ottimizzati coincidono (scarto relativo 5·10⁻⁷, partendo dallo stesso punto).
+Non è un caso: con un **unico schema di carico scalato**, il progetto a danno uniforme
+rende uguale il rapporto tra tensione e carico in tutti gli elementi, e resta ottimo per
+qualunque spettro. Lo spettro cambia la vita in giorni, non la forma ottima. La forma
+dipenderebbe dallo spettro con più casi di carico indipendenti, ad esempio forze in
+direzioni diverse in momenti diversi: è il prossimo passo naturale.
+
+Il 78,5 % del danno dell'elemento critico viene dalle aperture oltre l'80 %, che sono
+solo 15 su 40 al giorno: con una curva di fatica così ripida contano soprattutto i cicli
+ampi.
+
 ## Esecuzione
 
 ```bash
 python examples/06_lcf_clip/lcf_clip.py --save-plots results/lcf_clip
 ```
 
-Circa 30 secondi con il solutore interno.
+Circa 40 secondi con il solutore interno.
 
 ## Note
 
