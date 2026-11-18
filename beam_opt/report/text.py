@@ -42,6 +42,10 @@ def print_report(result, problem: OptimizationProblem) -> None:
     x_opt = result.x
     ev = problem.evaluate(x_opt)
 
+    # ── Objective ──
+    print("\n[OBJECTIVE]")
+    print(f"  {problem.objective_fn.describe(problem, ev)}")
+
     # ── Mass ──
     print("\n[STRUCTURAL MASS]")
     m_opt = ev.mass * TON_TO_G
@@ -51,6 +55,9 @@ def print_report(result, problem: OptimizationProblem) -> None:
     print(f"  Fixed elements       : {m_fixed:8.3f} g")
     print(f"  {'─' * 35}")
     print(f"  TOTAL                : {m_total:8.3f} g")
+    if problem.mass_max is not None:
+        ok = "✓ OK" if m_opt <= problem.mass_max * (1 + 1e-4) else "✗ VIOLATED"
+        print(f"  Budget (optimisable) : {problem.mass_max:8.3f} g   {ok}")
 
     # ── Stress ──
     sigma_vals = ev.sigma
@@ -58,19 +65,39 @@ def print_report(result, problem: OptimizationProblem) -> None:
     mat = problem.model.material
     print("\n[STRESS VERIFICATION]")
     print(f"  σ_max    : {sigma_max:7.2f} MPa")
-    print(
-        f"  σ_adm    : {sigma_adm:7.2f} MPa  (σ_y={mat.sigma_y} / FS={mat.sigma_y / sigma_adm:g})"
-    )
-    print(f"  Utilisation : {sigma_max / sigma_adm * 100:6.1f} %")
-    print(f"  {'✓ OK' if sigma_max <= sigma_adm else '✗ VIOLATED'}")
+    if problem.stress_limited:
+        print(
+            f"  σ_adm    : {sigma_adm:7.2f} MPa  "
+            f"(σ_y={mat.sigma_y} / FS={mat.sigma_y / sigma_adm:g})"
+        )
+        print(f"  Utilisation : {sigma_max / sigma_adm * 100:6.1f} %")
+        print(f"  {'✓ OK' if sigma_max <= sigma_adm * (1 + 1e-4) else '✗ VIOLATED'}")
+    else:
+        print(
+            f"  no stress constraint (σ_y = {mat.sigma_y} MPa, σ_max/σ_y = {sigma_max / mat.sigma_y:.0%})"
+        )
+
+    # ── Fatigue ──
+    if problem.fatigue is not None:
+        lives = problem.lives(ev)
+        k = int(lives.argmin())
+        print("\n[FATIGUE LIFE]")
+        print(
+            f"  N_min    : {lives[k]:.4g} cycles  (element {k + 1}, R = {problem.fatigue.load_ratio:g})"
+        )
+        if problem.life_min is not None:
+            ok = "✓ OK" if lives[k] >= problem.life_min * (1 - 1e-3) else "✗ VIOLATED"
+            print(f"  Required : {problem.life_min:.4g} cycles   {ok}")
 
     # ── Reaction ──
     f_react = float(ev.reaction)
-    print("\n[REACTION FORCE VERIFICATION]")
-    print(f"  F_react  : {f_react:7.4f} N")
-    print(f"  F_max    : {problem.f_react_max:7.4f} N")
-    print(f"  Utilisation : {f_react / problem.f_react_max * 100:6.1f} %")
-    print(f"  {'✓ OK' if f_react <= problem.f_react_max else '✗ VIOLATED'}")
+    if problem.reaction_nodes:
+        print("\n[REACTION FORCE VERIFICATION]")
+        print(f"  F_react  : {f_react:7.4f} N")
+    if problem.f_react_max is not None:
+        print(f"  F_max    : {problem.f_react_max:7.4f} N")
+        print(f"  Utilisation : {f_react / problem.f_react_max * 100:6.1f} %")
+        print(f"  {'✓ OK' if f_react <= problem.f_react_max * (1 + 1e-4) else '✗ VIOLATED'}")
 
     if problem.f_react_min is not None:
         print(f"  F_min    : {problem.f_react_min:7.4f} N")

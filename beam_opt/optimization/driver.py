@@ -53,14 +53,14 @@ class _BudgetReached(Exception):
 
 
 class _Scaled:
-    """The problem seen by the algorithms: z in [0, 1], mass relative to the heaviest design."""
+    """The problem seen by the algorithms: z in [0, 1], objective relative to its magnitude."""
 
     def __init__(self, problem: OptimizationProblem, max_evals: int) -> None:
         self.problem = problem
         self.last_solve = len(problem.history) + int(max_evals)
         self.lo = problem.lower
         self.span = problem.upper - problem.lower
-        self.f_ref = problem.objective(problem.upper)
+        self.f_ref = problem.objective_scale()
         self.n = problem.n_vars
         self.bounds = Bounds(np.zeros(self.n), np.ones(self.n))
 
@@ -70,12 +70,17 @@ class _Scaled:
     def z(self, x: np.ndarray) -> np.ndarray:
         return (np.asarray(x, dtype=float) - self.lo) / self.span
 
+    def _check_budget(self) -> None:
+        if len(self.problem.history) >= self.last_solve:
+            raise _BudgetReached
+
     def objective(self, z: np.ndarray) -> float:
+        if self.problem.objective_fn.needs_fem:
+            self._check_budget()
         return self.problem.objective(self.x(z)) / self.f_ref
 
     def constraints(self, z: np.ndarray) -> np.ndarray:
-        if len(self.problem.history) >= self.last_solve:
-            raise _BudgetReached
+        self._check_budget()
         return self.problem.constraint_vector(self.x(z))
 
 
@@ -180,7 +185,7 @@ def optimize(
     **options,
 ) -> OptimizeResult:
     """
-    Minimise the mass of *problem* with the chosen algorithm.
+    Minimise the objective of *problem* (the mass by default) with the chosen algorithm.
 
     Parameters
     ----------
@@ -212,7 +217,8 @@ def optimize(
     Returns
     -------
     OptimizeResult
-        ``x`` [mm] and ``fun`` [g] of the lightest feasible design evaluated,
+        ``x`` [mm] and ``fun`` (objective value, e.g. mass [g]) of the best
+        feasible design evaluated,
         ``max_violation`` [-], ``nfev`` (FEM solutions of this run),
         ``success``, ``message``, ``method`` and ``raw`` (the result of the
         underlying scipy routine, in scaled variables).  ``success`` is
@@ -230,8 +236,8 @@ def optimize(
     if x0.size != problem.n_vars:
         raise ValueError(f"x0 has {x0.size} entries, expected {problem.n_vars}")
 
-    sp = _Scaled(problem, max_evals)
     start = len(problem.history)
+    sp = _Scaled(problem, max_evals)
     logger.info("Starting %s  n_vars=%d  max_evals=%d", method, problem.n_vars, max_evals)
     z0 = np.clip(sp.z(x0), 0.0, 1.0)
     try:
@@ -242,7 +248,7 @@ def optimize(
             x=sp.z(last), success=False, message=f"budget of {max_evals} FEM solutions reached"
         )
 
-    # Lightest feasible design among those evaluated in this run (the point
+    # Best feasible design among those evaluated in this run (the point
     # returned by the algorithm is one of them, or is added here).
     candidates = [ev for ev in problem.history[start:] if not ev.failed]
     final = problem.evaluate(sp.x(raw.x))
@@ -251,10 +257,10 @@ def optimize(
     if not candidates:
         raise RuntimeError("every FEM evaluation of the run failed")
     violation = np.array([problem.max_violation(ev) for ev in candidates])
-    mass = np.array([ev.mass for ev in candidates])
+    value = np.array([problem.objective_of(ev) for ev in candidates])
     feasible = violation <= feas_tol
     if np.any(feasible):
-        best = int(np.flatnonzero(feasible)[np.argmin(mass[feasible])])
+        best = int(np.flatnonzero(feasible)[np.argmin(value[feasible])])
         success, message = bool(raw.success), str(raw.message)
     else:
         best = int(np.argmin(violation))
@@ -263,7 +269,7 @@ def optimize(
 
     return OptimizeResult(
         x=candidates[best].x.copy(),
-        fun=problem.objective(candidates[best].x),
+        fun=float(value[best]),
         max_violation=float(violation[best]),
         nfev=len(problem.history) - start,
         success=success,

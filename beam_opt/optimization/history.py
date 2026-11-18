@@ -6,7 +6,7 @@ CSV log of the FEM evaluations and restart from it.
 One row per FEM evaluation, written as soon as it is available, so an
 interrupted run loses nothing:
 
-    eval, mass_g, sigma_max, reaction, max_violation, failed, <variables…>
+    eval, mass_g, objective, sigma_max, reaction, max_violation, failed, <variables…>
 
 >>> problem = OptimizationProblem(..., history_file="run.csv")
 >>> optimize(problem, "cobyla")                      # interrupted or finished
@@ -21,7 +21,7 @@ import os
 
 import numpy as np
 
-_FIXED = ["eval", "mass_g", "sigma_max", "reaction", "max_violation", "failed"]
+_FIXED = ["eval", "mass_g", "objective", "sigma_max", "reaction", "max_violation", "failed"]
 
 
 class HistoryWriter:
@@ -59,14 +59,15 @@ class HistoryWriter:
             with open(self.path, "w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(header)
 
-    def write(self, ev, max_violation: float) -> None:
-        """Append evaluation *ev* (an ``Evaluation``) with its largest violation [-]."""
+    def write(self, ev, max_violation: float, objective: float = float("nan")) -> None:
+        """Append evaluation *ev* (an ``Evaluation``), its largest violation [-] and objective."""
         from .problem import TON_TO_G
 
         self._count += 1
         row = [
             self._count,
             repr(ev.mass * TON_TO_G),
+            repr(float(objective)),
             repr(float(np.max(ev.sigma))),
             repr(float(ev.reaction)),
             repr(float(max_violation)),
@@ -84,8 +85,9 @@ def read_history(path: str) -> dict[str, np.ndarray]:
     Returns
     -------
     dict[str, ndarray]
-        One array per fixed column (``eval``, ``mass_g`` [g], ``sigma_max``
-        [MPa], ``reaction`` [N], ``max_violation`` [-], ``failed``) plus
+        One array per fixed column (``eval``, ``mass_g`` [g], ``objective``,
+        ``sigma_max`` [MPa], ``reaction`` [N], ``max_violation`` [-],
+        ``failed``) plus
         ``"x"``, shape (n_eval, n_vars) [mm], and ``"names"``, the variable
         names.
     """
@@ -101,7 +103,7 @@ def read_history(path: str) -> dict[str, np.ndarray]:
 
 def best_design(path: str, feas_tol: float = 1e-4) -> np.ndarray:
     """
-    Lightest feasible design of a history file, to restart an optimisation.
+    Best feasible design of a history file (lowest objective), to restart an optimisation.
 
     Parameters
     ----------
@@ -128,6 +130,6 @@ def best_design(path: str, feas_tol: float = 1e-4) -> np.ndarray:
     feasible = ok & (h["max_violation"] <= feas_tol)
     if np.any(feasible):
         idx = np.flatnonzero(feasible)
-        return h["x"][idx[np.argmin(h["mass_g"][idx])]].copy()
+        return h["x"][idx[np.argmin(h["objective"][idx])]].copy()
     idx = np.flatnonzero(ok)
     return h["x"][idx[np.argmin(h["max_violation"][idx])]].copy()
