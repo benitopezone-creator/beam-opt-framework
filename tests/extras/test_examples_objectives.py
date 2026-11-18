@@ -85,11 +85,10 @@ def test_clip_service_life_under_a_daily_spectrum():
     assert result["spectrum"].cycles == pytest.approx(lcf.USES_PER_DAY)
     assert days["full openings"] > 3.0 * days["constant thickness"]
     # One load pattern scaled: minimising the worst damage is minimising the worst
-    # stress, whatever the life curve, so the optimal *value* does not depend on the
-    # spectrum.  The optimal *shape* is unique only where the clip is critical: library
-    # versions may stop at slightly different thicknesses elsewhere.
+    # stress, whatever the life curve.  Started from the optimum for full openings,
+    # the optimisation for the spectrum must find nothing better.
     assert days["daily spectrum"] == pytest.approx(days["full openings"], rel=1e-2)
-    np.testing.assert_allclose(result["x_tuned"], result["x_full"], rtol=0.1)
+    np.testing.assert_allclose(result["x_tuned"], result["x_full"], rtol=1e-2)
     assert sum(share for _, share in result["shares"]) == pytest.approx(1.0)
 
 

@@ -193,7 +193,7 @@ def service(problem: OptimizationProblem, grip: float = SERVICE_GRIP) -> dict:
     Service life in days of the clip designed for *grip*, with three designs.
 
     * optimised for full openings (the trade-off of the first part);
-    * optimised for the daily spectrum;
+    * optimised for the daily spectrum, starting from the previous one;
     * constant thickness.
     """
     model = service_model()
@@ -202,7 +202,9 @@ def service(problem: OptimizationProblem, grip: float = SERVICE_GRIP) -> dict:
 
     in_service = make_problem(n_elem=problem.model.beam.mesh.n_elem, n_ctrl=problem.n_ctrl)
     in_service.fatigue, in_service.f_react_min = model, grip
-    tuned = optimize(in_service, "slsqp", x0=np.full(problem.n_vars, 1.0))  # same start as full
+    # Start from the optimum for full openings: if it is also optimal for the
+    # spectrum, as the theory says for one load pattern, nothing better is found.
+    tuned = optimize(in_service, "slsqp", x0=full.x)
 
     t_const, _ = constant_clip(problem, grip)
     days = {
@@ -237,7 +239,9 @@ def print_service(s: dict) -> None:
         print(f"  {'designed for ' + name if name != 'constant thickness' else name:34}"
               f" {days:8.0f} days  ({days / 365.0:4.1f} years)")  # fmt: skip
     diff = np.max(np.abs(s["x_tuned"] / s["x_full"] - 1.0))
-    print(f"  the two optimised designs differ by {diff:.1e} at most (relative)")
+    gain = s["days"]["daily spectrum"] / s["days"]["full openings"] - 1.0
+    print(f"  tuning for the spectrum changes the life by {gain:+.2%}"
+          f" and the thickness by {diff:.1e} at most")  # fmt: skip
     print("  largest damage shares (critical element):")
     for block, share in s["shares"][:4]:
         print(

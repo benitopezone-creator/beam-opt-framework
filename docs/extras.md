@@ -145,6 +145,11 @@ Ipotesi:
   scali un unico schema di carico (non più casi di carico indipendenti).
 - **Regola di Miner lineare**: si trascurano gli effetti di sequenza e la memoria dei
   cicli di isteresi tra un blocco e l'altro.
+- **Convergenza con spettri frammentati**: con molti blocchi SLSQP richiede più analisi e,
+  in alcuni ambienti numerici, può fermarsi prima dell'ottimo partendo da un punto
+  lontano (osservato una volta nella CI su Linux, non riprodotto in locale). Conviene
+  partire da un buon progetto, ad esempio l'ottimo ad ampiezza costante, e controllare il
+  risultato ripartendo da esso.
 - **Tensione equivalente di von Mises presa positiva**: conservativo nei punti compressi
   quando conta la tensione media.
 - **Plasticità localizzata**: la regola di Neuber non redistribuisce le sollecitazioni

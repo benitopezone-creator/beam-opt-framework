@@ -59,14 +59,11 @@ Per la clip con presa di 60 N:
 | Ottimizzato per lo spettro giornaliero | 4675 giorni (12,8 anni) |
 | Spessore costante | 988 giorni (2,7 anni) |
 
-I due progetti ottimizzati hanno la stessa vita, e nella nostra esecuzione anche la stessa
-forma (scarto relativo 5·10⁻⁷, partendo dallo stesso punto). Non è un caso: con un
-**unico schema di carico scalato**, rendere minimo il danno peggiore equivale a rendere
-minima la tensione peggiore, qualunque sia la curva di fatica, quindi il valore ottimo non
-dipende dallo spettro. Lo spettro cambia la vita in giorni, non il progetto ottimo. La
-forma è determinata in modo univoco solo dove la clip è critica: con versioni diverse delle
-librerie numeriche gli spessori possono differire di qualche percento altrove (fino al
-4 % su Python 3.12 nella CI), a parità di vita. La forma
+Partendo dall'ottimo per aperture complete, l'ottimizzazione per lo spettro giornaliero
+non trova un progetto migliore: lo stesso progetto è ottimo in entrambi i casi. Non è un
+caso: con un **unico schema di carico scalato**, rendere minimo il danno peggiore equivale
+a rendere minima la tensione peggiore, qualunque sia la curva di fatica. Lo spettro cambia
+la vita in giorni, non il progetto ottimo. La forma
 dipenderebbe dallo spettro con più casi di carico indipendenti, ad esempio forze in
 direzioni diverse in momenti diversi: è il prossimo passo naturale.
 
