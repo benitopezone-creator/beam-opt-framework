@@ -14,6 +14,12 @@
   repetitions of the spectrum), rainflow counting `rainflow` / `LoadSpectrum.from_history`
   (ASTM E1049); cycles below the fatigue limit add no damage. Example 06 computes the
   service life of the clip in days from a daily usage history.
+- Independent load cases: `LoadCase(name, loads, weight, spectrum, cycles)` and
+  `OptimizationProblem(load_cases=...)`. Every design is analysed once per case; every
+  constraint holds in every case; compliance is the weighted sum, peak stress and
+  displacement the worst over the cases, fatigue damage is summed over the cases.
+  `Evaluation.cases` holds the results of every case. Example 07: curved bracket whose
+  optimal section changes with the mix of in-plane and out-of-plane loads.
 - `optimization.epsilon_constraint`: Pareto fronts between two goals.
 - `examples/05_stiffness_pareto` (stiffness against mass of the helix) and
   `examples/06_lcf_clip` (grip force against low-cycle fatigue life of the clip).

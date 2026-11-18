@@ -77,6 +77,15 @@ def print_report(result, problem: OptimizationProblem) -> None:
             f"  no stress constraint (σ_y = {mat.sigma_y} MPa, σ_max/σ_y = {sigma_max / mat.sigma_y:.0%})"
         )
 
+    # ── Load cases ──
+    if problem.load_cases:
+        print("\n[LOAD CASES]")
+        for case, res in zip(problem.load_cases, ev.cases):
+            line = f"  {case.name:<16} σ_max {res.sigma.max():8.2f} MPa"
+            if problem.reaction_nodes:
+                line += f"   F_react {res.reaction:9.3f} N"
+            print(line)
+
     # ── Fatigue ──
     if problem.fatigue is not None:
         lives = problem.lives(ev)
@@ -87,10 +96,12 @@ def print_report(result, problem: OptimizationProblem) -> None:
         else:
             load = f"{fat.spectrum.cycles:g} cycles per {fat.spectrum.name}, Miner's rule"
         print("\n[FATIGUE LIFE]")
-        print(f"  N_min    : {lives[k]:.4g} {fat.unit}  (element {k + 1}, {load})")
+        if problem.load_cases:
+            load = f"{len(problem.load_cases)} load cases, Miner's rule"
+        print(f"  N_min    : {lives[k]:.4g} {problem.life_unit}  (element {k + 1}, {load})")
         if problem.life_min is not None:
             ok = "✓ OK" if lives[k] >= problem.life_min * (1 - 1e-3) else "✗ VIOLATED"
-            print(f"  Required : {problem.life_min:.4g} {fat.unit}   {ok}")
+            print(f"  Required : {problem.life_min:.4g} {problem.life_unit}   {ok}")
 
     # ── Reaction ──
     f_react = float(ev.reaction)

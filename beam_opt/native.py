@@ -176,15 +176,16 @@ class NativeSolver:
         self.shear_deformation = bool(shear_deformation)
         self.last: NativeResult | None = None
         self.n_solves = 0
-        self._prepared: tuple[StructuralModel, dict] | None = None
+        self._prepared: dict[int, tuple[StructuralModel, dict]] = {}
 
     # ------------------------------------------------------------------
     # Model data that do not depend on the section law (computed once)
     # ------------------------------------------------------------------
 
     def _prepare(self, model: StructuralModel) -> dict:
-        if self._prepared is not None and self._prepared[0] is model:
-            return self._prepared[1]
+        cached = self._prepared.get(id(model))
+        if cached is not None and cached[0] is model:
+            return cached[1]
 
         mesh = model.beam.mesh
         index = {name: num - 1 for name, num in ModelBuilder.node_ids(model).items()}
@@ -292,7 +293,9 @@ class NativeSolver:
             "dofs": dofs,
             "fixed_sections": [fe.section for fe in fixed_beams],
         }
-        self._prepared = (model, data)
+        if len(self._prepared) >= 16:  # a few load cases at a time
+            self._prepared.clear()
+        self._prepared[id(model)] = (model, data)
         return data
 
     # ------------------------------------------------------------------

@@ -20,14 +20,14 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 
 import numpy as np
 
 from ..exceptions import SolutionNotConvergedError
 from ..fatigue import FatigueModel
-from ..model import ModelBuilder, StructuralModel
+from ..model import LoadCase, ModelBuilder, StructuralModel
 from ..native import NativeSolver
 from ..post import SectionStressEvaluator, StressEvaluator, last_results, reaction_resultant
 from ..section_law import OVERSHOOT_FREE, SectionLaw
@@ -47,6 +47,32 @@ CACHE_SIZE = 1024
 
 
 @dataclass
+class CaseResult:
+    """
+    Results of one load case of an evaluation.
+
+    Attributes
+    ----------
+    name : str
+        Load case (``"default"`` without load cases).
+    sigma : ndarray, shape (n_elem,)
+        Equivalent stress per optimisable element [MPa].
+    reaction : float
+        Resultant reaction on ``reaction_nodes`` [N].
+    displacements : ndarray
+        Displacement of every entry of ``displacement_limits`` [mm] or [rad].
+    watched : dict[tuple[str, str], float]
+        Displacements needed by the objective.
+    """
+
+    name: str
+    sigma: np.ndarray
+    reaction: float
+    displacements: np.ndarray
+    watched: dict
+
+
+@dataclass
 class Evaluation:
     """
     Results of one FEM evaluation.
@@ -58,18 +84,24 @@ class Evaluation:
     mass : float
         Mass of the optimisable beam [ton].
     sigma : ndarray, shape (n_elem,)
-        Equivalent stress per optimisable element [MPa].
+        Equivalent stress per optimisable element [MPa]; with several load
+        cases, the envelope (largest over the cases).
     reaction : float
-        Resultant reaction on ``reaction_nodes`` [N].
+        Resultant reaction on ``reaction_nodes`` [N]; with several load
+        cases, the largest.
     failed : bool
         ``True`` if the FEM solution did not converge: ``sigma`` and
         ``reaction`` are then penalty values, not results.
     displacements : ndarray
-        Displacement of every entry of ``displacement_limits`` [mm] or [rad].
+        Displacement of every entry of ``displacement_limits`` [mm] or [rad];
+        with several load cases, the one of largest magnitude.
     watched : dict[tuple[str, str], float]
-        Displacements needed by the objective, keyed by ``(node, dof)``.
+        Displacements needed by the objective, keyed by ``(node, dof)``
+        (first load case).
     derived : dict
         Quantities computed from the results on demand (e.g. fatigue lives).
+    cases : list[CaseResult]
+        Results of every load case.
     """
 
     x: np.ndarray
@@ -80,6 +112,7 @@ class Evaluation:
     displacements: np.ndarray = field(default_factory=lambda: np.zeros(0))
     watched: dict = field(default_factory=dict)
     derived: dict = field(default_factory=dict)
+    cases: list = field(default_factory=list)
 
 
 class OptimizationProblem:
@@ -123,7 +156,13 @@ class OptimizationProblem:
         Load cycle and material for fatigue lives (objective ``FatigueLife``
         and constraint ``life_min``).
     life_min : float | None
-        Required fatigue life of every element [cycles].
+        Required fatigue life of every element [cycles, or repetitions of the
+        spectrum / of the load cases].
+    load_cases : list[LoadCase] | None
+        Independent load situations (see ``beam_opt.model.LoadCase``): every
+        design is analysed once per case, every constraint must hold in every
+        case, fatigue damage is summed over the cases.  ``None``: the loads
+        of the model are the only case.
     evaluator : StressEvaluator | None
         Defaults to ``SectionStressEvaluator()``, valid for every ``Section``.
     settings : SolverSettings | None
@@ -159,6 +198,7 @@ class OptimizationProblem:
         mass_max: float | None = None,
         fatigue: FatigueModel | None = None,
         life_min: float | None = None,
+        load_cases: list[LoadCase] | None = None,
         evaluator: StressEvaluator | None = None,
         settings: SolverSettings | None = None,
         interpolator: str = "natural_cubic",
@@ -202,6 +242,13 @@ class OptimizationProblem:
                 "with NativeSolver the stress evaluator must provide from_forces() "
                 "(e.g. SectionStressEvaluator)"
             )
+        self.load_cases = list(load_cases or [])
+        names = [c.name for c in self.load_cases]
+        if len(set(names)) != len(names):
+            raise ValueError(f"load case names must be unique: {names}")
+        self.case_models = (
+            [c.apply_to(model) for c in self.load_cases] if self.load_cases else [model]
+        )
         self.objective_fn = objective or Mass()
         self.objective_fn.check(self)
         self.settings = settings or SolverSettings()
@@ -280,22 +327,27 @@ class OptimizationProblem:
         law = self.law_from_x(x)
         mass = self.model.beam.mass(law, self.model.material.rho)
         try:
-            sigma, reaction, disp, watched = self._solve(law)
+            cases = [
+                self._solve(law, m, name) for m, name in zip(self.case_models, self.case_names)
+            ]
         except SolutionNotConvergedError as err:
             if self.on_failure == "raise":
                 raise
             logger.warning("FEM evaluation %d failed: %s", len(self.history) + 1, err)
-            ev = Evaluation(
-                x.copy(),
-                mass,
-                np.full(self.model.beam.mesh.n_elem, self.failure_penalty * self.sigma_adm),
-                self.failure_penalty * (self.f_react_max or 1.0),
-                failed=True,
-                displacements=self.failure_penalty * self._disp_limits,
-                watched=dict.fromkeys(self._watch, np.nan),
-            )
+            cases = [
+                CaseResult(
+                    name,
+                    np.full(self.model.beam.mesh.n_elem, self.failure_penalty * self.sigma_adm),
+                    self.failure_penalty * (self.f_react_max or 1.0),
+                    self.failure_penalty * self._disp_limits,
+                    dict.fromkeys(self._watch, np.nan),
+                )
+                for name in self.case_names
+            ]
+            failed = True
         else:
-            ev = Evaluation(x.copy(), mass, sigma, reaction, displacements=disp, watched=watched)
+            failed = False
+        ev = self._envelope(x.copy(), mass, cases, failed)
 
         self.history.append(ev)
         self._cache[key] = ev
@@ -307,16 +359,36 @@ class OptimizationProblem:
         return ev
 
     @property
+    def case_names(self) -> list[str]:
+        """Names of the load cases (``["default"]`` without load cases)."""
+        return [c.name for c in self.load_cases] or ["default"]
+
+    @staticmethod
+    def _envelope(x, mass, cases: list[CaseResult], failed: bool) -> Evaluation:
+        sigma = np.max([c.sigma for c in cases], axis=0)
+        reaction = float(max(c.reaction for c in cases))
+        if cases[0].displacements.size:
+            stack = np.array([c.displacements for c in cases])
+            worst = np.argmax(np.abs(stack), axis=0)
+            disp = stack[worst, np.arange(stack.shape[1])]
+        else:
+            disp = cases[0].displacements
+        return Evaluation(
+            x, mass, sigma, reaction, failed=failed, displacements=disp,
+            watched=cases[0].watched, cases=cases,
+        )  # fmt: skip
+
+    @property
     def _disp_limits(self) -> np.ndarray:
         return np.array([lim for _, _, lim in self.displacement_limits])
 
-    def _solve(self, law: SectionLaw):
-        """Element stresses [MPa], reaction [N], limited and watched displacements."""
+    def _solve(self, law: SectionLaw, model: StructuralModel, name: str) -> CaseResult:
+        """Element stresses [MPa], reaction [N], limited and watched displacements of one case."""
         limits = [(node, dof) for node, dof, _ in self.displacement_limits]
         wanted = list(dict.fromkeys(limits + self._watch))
         if self.native:
-            res = self.mapdl.analyze(self.model, law, self.reaction_nodes)
-            sigma = self.evaluator.from_forces(res.forces, self.model.beam, law)
+            res = self.mapdl.analyze(model, law, self.reaction_nodes)
+            sigma = self.evaluator.from_forces(res.forces, model.beam, law)
             values = {
                 (n, d): float(res.displacements[res.node_index[n], _DOFS.index(d)])
                 for n, d in wanted
@@ -324,10 +396,10 @@ class OptimizationProblem:
             reaction = res.reaction
         else:
             m = self.mapdl
-            ids = self.builder.build(self.model, law)
+            ids = self.builder.build(model, law)
             solve(m, self.settings)
             with last_results(m):
-                sigma = self.evaluator(m, self.model.beam, law)
+                sigma = self.evaluator(m, model.beam, law)
             with last_results(m):
                 reaction = (
                     reaction_resultant(m, [ids[n] for n in self.reaction_nodes])
@@ -341,7 +413,7 @@ class OptimizationProblem:
                     for n, d in wanted
                 }
         disp = np.array([values[w] for w in limits])
-        return sigma, reaction, disp, {w: values[w] for w in self._watch}
+        return CaseResult(name, sigma, float(reaction), disp, {w: values[w] for w in self._watch})
 
     # ------------------------------------------------------------------
     # Objective
@@ -377,13 +449,17 @@ class OptimizationProblem:
         For a failed FEM evaluation, every value is the failure value.
         """
         ev = self.evaluate(x)
+        values = np.asarray(self.objective_fn.values(self, ev), dtype=float)
         if ev.failed:
-            return np.full(self.model.beam.mesh.n_elem, self._failed_objective())
-        return np.asarray(self.objective_fn.values(self, ev), dtype=float)
+            return np.full(values.shape, self._failed_objective())
+        return values
 
     @property
     def is_minmax(self) -> bool:
-        """Whether the objective is the worst of per-element values."""
+        """Whether the objective is the worst of several values (elements, load cases)."""
+        own = getattr(self.objective_fn, "is_minmax", None)
+        if callable(own):
+            return bool(own(self))
         return type(self.objective_fn).values is not Objective.values
 
     def _failed_objective(self) -> float:
@@ -403,12 +479,41 @@ class OptimizationProblem:
         """Mass of the full structure [g]."""
         return self.mass_g(x) + self.mass_fixed * TON_TO_G
 
+    @property
+    def life_unit(self) -> str:
+        """Unit of the fatigue lives: cycles, or repetitions of the spectrum / of the cases."""
+        if not self.load_cases:
+            return self.fatigue.unit
+        for case in self.load_cases:
+            if case.spectrum is not None:
+                return f"{case.spectrum.name}s"
+        return self.fatigue.unit if self.fatigue.spectrum is not None else "repetitions"
+
     def lives(self, ev: Evaluation) -> np.ndarray:
-        """Fatigue life of every optimisable element [cycles] (needs ``fatigue``)."""
+        """
+        Fatigue life of every optimisable element (needs ``fatigue``), in ``life_unit``.
+
+        With load cases, Miner damage is summed over the cases: the life is
+        the number of repetitions of the whole set of cases.  Cycles formed
+        by the transitions between different cases are not counted.
+        """
         if self.fatigue is None:
             raise ValueError("no FatigueModel: pass OptimizationProblem(fatigue=...)")
         if "lives" not in ev.derived:
-            ev.derived["lives"] = self.fatigue.life(ev.sigma)
+            if not self.load_cases:
+                ev.derived["lives"] = self.fatigue.life(ev.sigma)
+            else:
+                damage = np.zeros(self.model.beam.mesh.n_elem)
+                for case, res in zip(self.load_cases, ev.cases):
+                    if case.spectrum is not None:
+                        model = replace(self.fatigue, spectrum=case.spectrum)
+                        damage = damage + model.damage(res.sigma)
+                    else:
+                        damage = damage + case.cycles * self.fatigue.damage(res.sigma)
+                cap = 0.5e12
+                ev.derived["lives"] = np.where(
+                    damage > 0.0, 1.0 / np.maximum(damage, 1.0 / cap), cap
+                )
         return ev.derived["lives"]
 
     # ------------------------------------------------------------------
@@ -442,7 +547,11 @@ class OptimizationProblem:
         return np.array(t)
 
     def constraint_stress(self, x: np.ndarray) -> np.ndarray:
-        """Per-element stress constraint σ_VM ≤ σ_adm [-] (empty without a safety factor)."""
+        """
+        Per-element stress constraint σ_VM ≤ σ_adm [-] (empty without a safety factor).
+
+        With load cases, on the envelope of the stresses.
+        """
         if not self.stress_limited:
             return np.zeros(0)
         return (self.sigma_adm - self.evaluate(x).sigma) / self.sigma_adm
@@ -476,16 +585,17 @@ class OptimizationProblem:
         return np.log10(self.lives(self.evaluate(x))) - np.log10(self.life_min)
 
     def _response_constraints(self, ev: Evaluation) -> list:
-        """Every constraint that depends on the FEM results of *ev*."""
+        """Every constraint that depends on the FEM results of *ev* (in every load case)."""
         g = []
-        if self.stress_limited:
-            g.append((self.sigma_adm - ev.sigma) / self.sigma_adm)
-        if self.f_react_max is not None:
-            g.append([1.0 - ev.reaction / self.f_react_max])
-        if self.f_react_min is not None:
-            g.append([ev.reaction / self.f_react_min - 1.0])
-        if self.displacement_limits:
-            g.append(1.0 - np.abs(ev.displacements) / self._disp_limits)
+        for case in ev.cases:
+            if self.stress_limited:
+                g.append((self.sigma_adm - case.sigma) / self.sigma_adm)
+            if self.f_react_max is not None:
+                g.append([1.0 - case.reaction / self.f_react_max])
+            if self.f_react_min is not None:
+                g.append([case.reaction / self.f_react_min - 1.0])
+            if self.displacement_limits:
+                g.append(1.0 - np.abs(case.displacements) / self._disp_limits)
         if self.life_min is not None:
             g.append(np.log10(self.lives(ev)) - np.log10(self.life_min))
         return g

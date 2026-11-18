@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from beam_opt import optimize
+
 EXAMPLES = Path(__file__).parents[1] / "examples"
 
 
@@ -21,6 +23,7 @@ def _load(folder: str, name: str):
 
 stiff = _load("05_stiffness_pareto", "stiffness_pareto")
 lcf = _load("06_lcf_clip", "lcf_clip")
+bracket = _load("07_bracket_load_cases", "bracket")
 
 
 @pytest.fixture(scope="module")
@@ -85,3 +88,26 @@ def test_clip_service_life_under_a_daily_spectrum():
     np.testing.assert_allclose(result["x_tuned"], result["x_full"], rtol=1e-3)
     assert days["daily spectrum"] == pytest.approx(days["full openings"], rel=1e-3)
     assert sum(share for _, share in result["shares"]) == pytest.approx(1.0)
+
+
+def test_bracket_optimum_depends_on_the_load_mix():
+    rare, frequent = 0.0, 100.0
+    problems = {k: bracket.make_problem(k, n_elem=30, n_ctrl=5) for k in (rare, frequent)}
+    x0 = np.full(problems[rare].n_vars, 6.0)
+    designs = {k: optimize(p, "slsqp", x0=x0).x for k, p in problems.items()}
+    for k, p in problems.items():
+        assert p.max_violation(p.evaluate(designs[k])) <= 1e-4
+        assert p.mass_g(designs[k]) == pytest.approx(bracket.MASS_BUDGET, rel=2e-3)
+
+    def aspect(k):  # mean h / b along the bracket
+        law = problems[k].law_from_x(designs[k]).eval(problems[k].model.beam.mesh.s_elem)
+        return float(np.mean(law["h"] / law["b"]))
+
+    assert aspect(frequent) > 1.3 * aspect(rare)  # more knocks: deeper out of plane
+    # each design is the better one for its own mix
+    for own, other in ((rare, frequent), (frequent, rare)):
+        mine = bracket.life_days(problems[own], designs[own])
+        theirs = bracket.life_days(problems[own], designs[other])
+        assert mine > theirs
+    ignoring = bracket.life_days(problems[frequent], designs[rare])
+    assert bracket.life_days(problems[frequent], designs[frequent]) > 10.0 * ignoring

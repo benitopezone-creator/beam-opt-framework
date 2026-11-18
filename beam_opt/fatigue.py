@@ -406,13 +406,15 @@ class FatigueModel:
         s = np.abs(np.asarray(stress, dtype=float))
         if self.spectrum is None:
             return self._cycle_damage(self.cycle_life(s), 1.0)
-        total = np.zeros_like(s)
-        for block in self.spectrum.blocks:
-            if block.cycles == 0.0 or block.range == 0.0:
-                continue
-            n = self.cycle_life(block.peak * s, block.range * s)
-            total = total + self._cycle_damage(n, block.cycles)
-        return total
+        blocks = [b for b in self.spectrum.blocks if b.cycles > 0.0 and b.range > 0.0]
+        if not blocks:
+            return np.zeros_like(s)
+        # every block at once: arrays of shape (n_blocks, *s.shape)
+        peak = np.array([b.peak for b in blocks]).reshape((-1,) + (1,) * s.ndim)
+        rng = np.array([b.range for b in blocks]).reshape(peak.shape)
+        cycles = np.array([b.cycles for b in blocks]).reshape(peak.shape)
+        lives = self.cycle_life(peak * s, rng * s)
+        return np.sum(self._cycle_damage(lives, cycles), axis=0)
 
     @staticmethod
     def _cycle_damage(lives: np.ndarray, cycles: float) -> np.ndarray:

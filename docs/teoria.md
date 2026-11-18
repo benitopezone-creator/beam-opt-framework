@@ -172,6 +172,23 @@ stesso profilo `h(s) ∝ sqrt(L − s)`, la trave a uniforme resistenza. Rispett
 prismatica della stessa massa la cedevolezza si riduce di un fattore 27/16. I test lo
 verificano: l'ottimizzatore arriva entro lo 0,3 % dalla soluzione discreta esatta.
 
+### Casi di carico indipendenti
+
+Con `load_cases=[LoadCase(...), ...]` ogni progetto viene analizzato una volta per caso.
+Ogni caso sostituisce i carichi del modello (forze nodali, spostamenti imposti) e ne
+conserva i vincoli. Poi:
+
+- **vincoli**: tensione, reazioni e spostamenti devono valere in ogni caso;
+- **cedevolezza**: `Σ_c w_c C_c`, con i pesi dei casi;
+- **tensione di picco e spostamento**: il peggiore tra tutti gli elementi e tutti i casi,
+  con la stessa formulazione a epigrafe;
+- **fatica**: ogni caso ha il proprio spettro (o un numero di cicli), e il danno di Miner
+  si somma sui casi, `D = Σ_c D_c`. I cicli dovuti alla transizione tra casi diversi non
+  sono contati.
+
+Con un solo schema di carico la forma ottima non dipende dallo spettro (sezione 7); con
+più casi che sollecitano la sezione in modi diversi sì, ed è quello che mostra l'esempio 07.
+
 ## 7. Fatica oligociclica: approccio locale in deformazione
 
 L'analisi è lineare e fornisce la tensione *elastica* `S` al picco del ciclo di carico.

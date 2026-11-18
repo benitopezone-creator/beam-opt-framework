@@ -98,29 +98,38 @@ class Compliance(Objective):
     is maximum stiffness.
 
     Only nodal forces and moments do work; imposed displacements are
-    supports (zero work).
+    supports (zero work).  With load cases, the weighted sum
+    ``Σ_c w_c C_c``.
     """
 
     name, unit = "compliance", "N·mm"
 
     @staticmethod
-    def _loads(problem) -> list[NodalForce]:
-        return [bc for bc in problem.model.bcs if isinstance(bc, NodalForce)]
+    def _loads(model) -> list[NodalForce]:
+        return [bc for bc in model.bcs if isinstance(bc, NodalForce)]
 
     def check(self, problem) -> None:
-        if not self._loads(problem):
-            raise ValueError("Compliance needs at least one NodalForce in the model")
+        if not any(self._loads(m) for m in problem.case_models):
+            raise ValueError("Compliance needs at least one NodalForce")
 
     def watch(self, problem) -> list[tuple[str, str]]:
-        return [(bc.node, _FORCE_TO_DOF[bc.direction]) for bc in self._loads(problem)]
+        return [
+            (bc.node, _FORCE_TO_DOF[bc.direction])
+            for m in problem.case_models
+            for bc in self._loads(m)
+        ]
+
+    def case_values(self, problem, ev) -> list[float]:
+        """Compliance of every load case [N·mm]."""
+        return [
+            float(sum(bc.value * res.watched[(bc.node, _FORCE_TO_DOF[bc.direction])]
+                      for bc in self._loads(m)))
+            for m, res in zip(problem.case_models, ev.cases)
+        ]  # fmt: skip
 
     def value(self, problem, ev) -> float:
-        return float(
-            sum(
-                bc.value * ev.watched[(bc.node, _FORCE_TO_DOF[bc.direction])]
-                for bc in self._loads(problem)
-            )
-        )
+        weights = [c.weight for c in problem.load_cases] or [1.0]
+        return float(sum(w * c for w, c in zip(weights, self.case_values(problem, ev))))
 
 
 class Displacement(Objective):
@@ -148,8 +157,16 @@ class Displacement(Objective):
     def watch(self, problem) -> list[tuple[str, str]]:
         return [(self.node, self.dof)]
 
+    def values(self, problem, ev) -> np.ndarray:
+        """Magnitude of the displacement in every load case."""
+        return np.array([abs(float(res.watched[(self.node, self.dof)])) for res in ev.cases])
+
+    def is_minmax(self, problem) -> bool:
+        """A worst case only with several load cases."""
+        return len(problem.load_cases) > 1
+
     def value(self, problem, ev) -> float:
-        return abs(float(ev.watched[(self.node, self.dof)]))
+        return float(np.max(self.values(problem, ev)))
 
     def describe(self, problem, ev) -> str:
         return f"|{self.dof}| at {self.node!r}: {self.value(problem, ev):.6g} {self.unit}"
@@ -166,7 +183,7 @@ class PeakStress(Objective):
     name, unit = "peak stress / σ_adm", "-"
 
     def values(self, problem, ev) -> np.ndarray:
-        return ev.sigma / problem.sigma_adm
+        return np.concatenate([res.sigma for res in ev.cases]) / problem.sigma_adm
 
     def value(self, problem, ev) -> float:
         return float(np.max(self.values(problem, ev)))
@@ -199,7 +216,7 @@ class FatigueLife(Objective):
     def describe(self, problem, ev) -> str:
         lives = problem.lives(ev)
         k = int(np.argmin(lives))
-        return f"fatigue life: {lives[k]:.4g} {problem.fatigue.unit} (element {k + 1})"
+        return f"fatigue life: {lives[k]:.4g} {problem.life_unit} (element {k + 1})"
 
 
 class WeightedSum(Objective):
